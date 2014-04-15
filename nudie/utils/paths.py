@@ -4,7 +4,7 @@ import logging
 
 __all__ = ['gather_information', 'setup_paths']
 
-log = logging.getLogger('nudie.system_info')
+log = logging.getLogger('nudie.paths')
 log.addHandler(logging.NullHandler())
 
 def gather_information():
@@ -32,7 +32,6 @@ def setup_paths():
         from pathlib import Path
     except ImportError as e:
         log.error('could not find `pathlib` module. please run python 3.4 or install pathlib')
-        log.exception('could not find `pathlib` module. please run python 3.4 or install pathlib')
         raise e
     
     sys = info['system']
@@ -57,4 +56,5 @@ def setup_paths():
         raise RuntimeError(s)
         
     log.info('mount_point global variable is set to `{mp:s}`'.format(mp=str(mount_point)))
-    return None
+    return mount_point
+

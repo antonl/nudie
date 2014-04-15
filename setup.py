@@ -7,14 +7,12 @@ setup(
 
     # Project uses reStructuredText, so ensure that the docutils get
     # installed or upgraded on the target machine
-    install_requires = ['pathlib'],
+    install_requires = ['numpy'],
 
     # metadata for upload to PyPI
     author = "Anton Loukianov",
     author_email = "aloukian@umich.edu",
-    description = "This is a set of tools that I use to analyze 2D spectra. 
-    The goal is to have a unified, tested, and version-controlled set of analysis 
-    scripts that \"just work.\"",
+    description = "This is a set of tools that I use to analyze 2D spectra. The goal is to have a unified, tested, and version-controlled set of analysis scripts that \"just work.\"",
     license = "GPL",
     keywords = "ultrafast spectroscopy 2D fourier transform",
     url = "http://umich.edu/~aloukian/nudiepy",   # project home page, if any
