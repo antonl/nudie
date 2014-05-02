@@ -51,10 +51,10 @@ def setup_paths():
     
     # check that the mount point exists
     if mount_point is not None and not mount_point.exists():
-        s = 'mount_point path is incorrect. `{mp:s}` does not exist.'.format(mp=mount_point)
+        s = 'mount_point path is incorrect. `{mp!s}` does not exist.'.format(mp=mount_point)
         log.error(s)
         raise RuntimeError(s)
         
-    log.info('mount_point global variable is set to `{mp:s}`'.format(mp=str(mount_point)))
+    log.info('mount_point global variable is set to `{mp!s}`'.format(mp=mount_point))
     return mount_point
 
