@@ -4,6 +4,13 @@ This is a set of tools that I use to analyze 2D spectra. The goal is to have a
 unified, tested, and version-controlled set of analysis scripts that "just
 work."
 
+## Philosophy
+
+- Use convention over configuration. So far, the main culprit is the `paths`
+  submodule in utils.
+- Just work, or fail quickly
+- If it isn't tested, it is broken
+
 ## Requirements
 
 - Python 2.7 or 3.4
