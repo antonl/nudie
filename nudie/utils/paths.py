@@ -5,7 +5,6 @@ import logging
 __all__ = ['gather_information', 'setup_paths']
 
 log = logging.getLogger('nudie.paths')
-log.addHandler(logging.NullHandler())
 
 def gather_information():
     ''' collect information about running machine

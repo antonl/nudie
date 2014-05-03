@@ -10,7 +10,6 @@ import pathlib
 __all__ = ['SpeFile', 'test_headers']
 
 log = logging.getLogger('nudie.winspec')
-log.addHandler(logging.NullHandler)
 
 __author__ = "Anton Loukianov"
 __email__ = "anton.loukianov@gmail.com"
