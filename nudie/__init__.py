@@ -4,12 +4,19 @@ import logging
 log = logging.getLogger(__name__)
 log.addHandler(logging.NullHandler())
 
+def show_errors(level=logging.WARNING):
+    sh = logging.StreamHandler()
+    fmt = logging.Formatter('%(asctime)s %(levelname)s: %(message)s') 
+    sh.setFormatter(fmt)
+    log.handlers[0] = sh
+    log.setLevel(level)
+
 from .utils.winspec import SpeFile
 from .utils.paths import setup_paths
 from .utils.batch_loader import load_job
 
 try:
-    mount_point = setup_paths()
+    mount_point, data_folder = setup_paths()
 except RuntimeError as e:
     pass
 

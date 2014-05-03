@@ -24,7 +24,6 @@ def setup_paths():
     location of the data drive, assuming that it is in conventional locations.
     If that path doesn't work, it raises a `RuntimeError`. Requires pathlib.
     '''
-    global mount_point
     info = gather_information()
     
     try:
@@ -54,6 +53,17 @@ def setup_paths():
         log.error(s)
         raise RuntimeError(s)
         
-    log.info('mount_point global variable is set to `{mp!s}`'.format(mp=mount_point))
-    return mount_point
+    data_folder = mount_point / Path('2D/Data')
+
+    # check that the mount point exists
+    if not data_folder.exists():
+        s = 'data_folder does not exist `{df!s}`' + \
+            'does not exist.'.format(df=data_folder)
+        log.error(s)
+        raise RuntimeError(s)
+    
+    log.info('mount_point variable is set to `{mp!s}`'.format(mp=mount_point))
+    log.info('data_folder variable is set to `{df!s}`'.format(df=data_folder))
+
+    return mount_point, data_folder
 
