@@ -11,14 +11,18 @@ def show_errors(level=logging.WARNING):
     log.handlers[0] = sh
     log.setLevel(level)
 
+from . import utils
 from .utils.winspec import SpeFile
 from .utils.paths import setup_paths
-from .utils.batch_loader import load_job
 
 try:
     mount_point, data_folder = setup_paths()
 except RuntimeError as e:
     pass
+
+# this must be loaded after setup_paths is run
+from .utils.batch_loader import load_job
+
 
 
 
