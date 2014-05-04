@@ -73,9 +73,9 @@ def _examine_batch_dir(job_name, path):
 
     job_pattern = re.compile(job_name + r'(\d+)-(\d+)-(\d+)\.spe')
     
-    t1val_range = (0, 0)
-    tableval_range = (0, 0)
-    loop_range = (0, 0)
+    t1val_range = [0, 0]
+    tableval_range = [0, 0]
+    loop_range = [0, 0]
 
     # find the loop ranges
     for p in sorted(path.glob('*.spe')):
@@ -88,8 +88,8 @@ def _examine_batch_dir(job_name, path):
         t1val_range[0] = min(t1val_range[0], myt1val)
         t1val_range[1] = max(t1val_range[1], myt1val)
 
-        tableval[0] = min(tableval[0], mytableval)
-        tableval[1] = max(tableval[1], mytableval)
+        tableval_range[0] = min(tableval_range[0], mytableval)
+        tableval_range[1] = max(tableval_range[1], mytableval)
 
         loop_range[0] = min(loop_range[0], myloopval)
         loop_range[1] = max(loop_range[1], myloopval)
@@ -103,10 +103,10 @@ def _examine_t1t2_files(path):
     # look for t1pos and t2pos files
 
     try:
-        with open(str(path / Path('t1pos.txt')), 'r') as f:
-            t1vals = np.genfromtxt(f)
-        with open(str(path / Path('t2pos.txt')), 'r') as f:
-            t2vals = np.genfromtxt(f)
+        with open(str(path / Path('t1pos.txt')), 'rb') as f:
+            t1vals = np.genfromtxt(f, dtype=float)
+        with open(str(path / Path('t2pos.txt')), 'rb') as f:
+            t2vals = np.genfromtxt(f, dtype=float)
             t2vals.reshape((-1,2))
 
     except Exception as e:
