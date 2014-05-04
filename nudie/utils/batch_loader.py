@@ -5,6 +5,7 @@ import logging
 log = logging.getLogger('nudie.batch_loader')
 from datetime import date
 import numpy as np
+from collections import namedtuple
 
 # This should really not be done here. I'll figure out where to move it later.
 try:
@@ -58,7 +59,8 @@ def load_job(job_name, when='today', batch_set=set([0]), data_path=data_folder):
             # Should it really skip on an error? 
             continue
 
-        _examine_batch_dir(job_name, batch_path)
+        batch_info = _examine_batch_dir(job_name, batch_path)
+
 
 def _examine_batch_dir(job_name, path):
     '''file parses the directory structure and determines the loop settings 
@@ -73,20 +75,20 @@ def _examine_batch_dir(job_name, path):
 
     job_pattern = re.compile(job_name + r'(\d+)-(\d+)-(\d+)\.spe')
     
-    t1val_range = [0, 0]
+    t2val_range = [0, 0]
     tableval_range = [0, 0]
     loop_range = [0, 0]
 
     # find the loop ranges
     for p in sorted(path.glob('*.spe')):
         log.debug('got file {!s} from batch dir'.format(p))
-        myt1val, mytableval, myloopval = \
+        myt2val, mytableval, myloopval = \
                 (int(x) for x in job_pattern.match(p.name).groups())
         log.debug('t1val: {:d}\ttableval: {:d}\tloopval: {:d}'.format( \
-                myt1val, mytableval, myloopval))
+                myt2val, mytableval, myloopval))
 
-        t1val_range[0] = min(t1val_range[0], myt1val)
-        t1val_range[1] = max(t1val_range[1], myt1val)
+        t2val_range[0] = min(t2val_range[0], myt2val)
+        t2val_range[1] = max(t2val_range[1], myt2val)
 
         tableval_range[0] = min(tableval_range[0], mytableval)
         tableval_range[1] = max(tableval_range[1], mytableval)
@@ -96,7 +98,26 @@ def _examine_batch_dir(job_name, path):
 
     log.debug('Got ranges:')
     log.debug('t1val: {!s}\ttableval: {!s}\tloopval: {!s}'.format( \
-            t1val_range, tableval_range, loop_range))
+            t2val_range, tableval_range, loop_range))
+
+    found_nt2 = t2val_range[1]+1
+    if nt2 != found_nt2:
+        s = 'mismatch between number of t2 values in t2pos.txt and in ' + \
+                'the SPE file ranges ({:d} vs {:d})'.format(nt2, found_nt2)
+        log.error(s)
+        raise RuntimeError(s)
+
+    batch_info = {
+        't1': t1vals,
+        'nt1': nt1,
+        't2': t2vals,
+        'nt2': nt2,
+        'table_range': range(tableval_range[0], tableval_range[1]+1),
+        'loop_range': range(loop_range[0], loop_range[1]+1),
+        't2_range': range(t2val_range[0], t2val_range[1] + 1),
+        }
+    log.debug('made batch info: {!s}'.format(batch_info))
+    return batch_info
 
 def _examine_t1t2_files(path):
     assert path.is_dir() == True
@@ -106,14 +127,18 @@ def _examine_t1t2_files(path):
         with open(str(path / Path('t1pos.txt')), 'rb') as f:
             t1vals = np.genfromtxt(f, dtype=float)
         with open(str(path / Path('t2pos.txt')), 'rb') as f:
-            t2vals = np.genfromtxt(f, dtype=float)
-            t2vals.reshape((-1,2))
+            t2vals = np.genfromtxt(f, dtype=float).reshape((-1,2))
 
     except Exception as e:
         log.error('could not read t1pos and t2pos files')
         log.exception(e)
         raise RuntimeError('could not analyze t1pos or t2pos in' + \
             '{!s}'.format(path))
+
+    log.debug('parsed t1: {!r}'. format(t1vals))
+    log.debug('t1 shape: {!s}'. format(t1vals.shape))
+    log.debug('parsed t2: {!r}'.format(t2vals))
+    log.debug('t2 shape: {!s}'. format(t2vals.shape))
     
     return t1vals.shape[0], t1vals, t2vals.shape[0], t2vals
     
