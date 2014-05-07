@@ -1,11 +1,12 @@
-'''contains files to load the output of our LabView data taking stuff'''
+'''
+Generator for loading batches from a given job. Returns a job info dictionary.
+'''
 import re
 from pathlib import Path
 import logging
 log = logging.getLogger('nudie.batch_loader')
 from datetime import date
 import numpy as np
-from collections import namedtuple
 
 # This should really not be done here. I'll figure out where to move it later.
 try:
@@ -38,8 +39,15 @@ def load_job(job_name, when='today', batch_set=set([0]), data_path=data_folder):
         log.info('`when` is None, assuming direct path to data')
     else:
         # assume when is a string to the right date folder in data_folder 
-        log.info('`when` is \'{:s}\', assuming correct date')
-        data_path = data_path / Path(when)
+        log.info('`when` is \'{!s}\', assuming that it is a date folder' \
+                .format(when))
+        try:
+            data_path = data_path / Path(when)
+        except: 
+            s = 'could not convert `when` parameter {!r} to a' + \
+                'path'.format(when)  
+            log.error(s)
+            raise ValueError(s)
 
     if data_path.is_dir() is False:
         s = '`data_path` (`{!s}`) is not a valid directory.'.format(data_path)
@@ -60,7 +68,8 @@ def load_job(job_name, when='today', batch_set=set([0]), data_path=data_folder):
             continue
 
         batch_info = _examine_batch_dir(job_name, batch_path)
-
+        
+        yield batch_info
 
 def _examine_batch_dir(job_name, path):
     '''file parses the directory structure and determines the loop settings 
@@ -141,4 +150,3 @@ def _examine_t1t2_files(path):
     log.debug('t2 shape: {!s}'. format(t2vals.shape))
     
     return t1vals.shape[0], t1vals, t2vals.shape[0], t2vals
-    
