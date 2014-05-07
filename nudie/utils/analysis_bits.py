@@ -114,7 +114,7 @@ def synchronize_daq_to_camera(camera_frames, analog_channels=[],
         # assume data has been loaded with SpeFile with the order being
         # [ROI index, Pixel index, Frame index]
         truncate_to = min(camera_frames.shape[2], 
-                analog_channels[0].shape[0] - offby)
+                analog_channels[0].shape[0])
 
         log.debug('{:d}\t # of camera frames'.format(camera_frames.shape[2]))
         log.debug('{:d}\t # of analog measurements' \
@@ -122,8 +122,8 @@ def synchronize_daq_to_camera(camera_frames, analog_channels=[],
         log.debug('{:d}\t # offby setting'.format(offby))
         log.debug('{:d}\t # truncate to'.format(truncate_to))
 
-        assert truncate_to < analog_channels[0].shape[0]
-        assert truncate_to < camera_frames.shape[2] 
+        assert truncate_to <= analog_channels[0].shape[0]
+        assert truncate_to <= camera_frames.shape[2] 
 
         return camera_frames[roi, :, :truncate_to].squeeze(), \
                 [x[:truncate_to] for x in analog_channels]
@@ -139,14 +139,14 @@ def synchronize_daq_to_camera(camera_frames, analog_channels=[],
         log.debug('{:d}\t # offby setting'.format(offby))
         log.debug('{:d}\t # truncate to'.format(truncate_to))
 
-        assert truncate_to < analog_channels[0].shape[0]
-        assert truncate_to < camera_frames.shape[2] 
+        assert truncate_to <= analog_channels[0].shape[0] - offby
+        assert truncate_to <= camera_frames.shape[2] 
 
         # throw away the first offby measurements on the daq
         # note that the order is different for throwing away measurements
         # in comparison to the previous case
         return camera_frames[roi, :, :truncate_to].squeeze(), \
-                [x[offby:truncate_to] for x in analog_channels]
+                [x[offby:truncate_to+offby] for x in analog_channels]
 
 def detect_table_start(array, waveform_repeat=1):
     '''detects peaks output when the Dazzler table starts at the begining by
