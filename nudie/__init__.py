@@ -14,7 +14,8 @@ def show_errors(level=logging.WARNING):
 from . import utils
 from .utils.winspec import SpeFile
 from .utils.paths import setup_paths
-from .utils.analysis_bits import tag_phases, cleanup_analogtxt
+from .utils.analysis_bits import tag_phases, cleanup_analogtxt, \
+    detect_table_start, synchronize_daq_to_camera, load_analogtxt
 try:
     mount_point, data_folder = setup_paths()
 except RuntimeError as e:

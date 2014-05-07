@@ -56,6 +56,8 @@ def load_job(job_name, when='today', batch_set=set([0]), data_path=data_folder):
     
     for n, batch in enumerate(batch_set):
         s = job_name + '-batch{:02d}'.format(batch)
+        # this might not be the best idea because this information
+        # could be accessed on a different operating system
         batch_path = data_path / Path(s)
 
         log.info('loading `{!s}`'.format(batch_path))
@@ -68,6 +70,10 @@ def load_job(job_name, when='today', batch_set=set([0]), data_path=data_folder):
             continue
 
         batch_info = _examine_batch_dir(job_name, batch_path)
+        batch_info['batch_no'] = n
+        batch_info['batch_name'] = s
+        batch_info['when'] = when
+        batch_info['job_name'] = job_name
         
         yield batch_info
 

@@ -7,6 +7,7 @@ log = logging.getLogger('nudie.analysis_bits')
 import itertools as it
 import numpy as np
 from pathlib import Path
+from .. import SpeFile
 
 def repeatn(iter, n=1):
     '''repeat each item in an iterator n times'''
@@ -25,7 +26,7 @@ def cleanup_analogtxt(file):
 
             assert len(arr.shape) == 1, "should be single column file"
             if not np.all(np.not_equal(arr, np.nan)):
-                s = '`{!s}` contains invalid data. NANs detected!'.format(file)
+                s = '`{!s}` contains invalid data. NaNs detected!'.format(file)
                 log.error(s)
                 raise RuntimeError(s)
 
@@ -35,28 +36,141 @@ def cleanup_analogtxt(file):
         log.error('could not read file `{!s}`'.format(file))
         raise e
 
-def detect_table_start(array, repeat=1):
+def load_analogtxt(job_name, batch_path, t2, table, loop, nchannels=2):
+    '''loads the analogtxt files corresponding to a given set of t2,table,
+    and loop values. Returns a list of arrays. Channel names start with 1.
+    '''
+
+    analogs = []
+    for c in range(1, nchannels+1): # analog channels are 1-indexed
+        s = '{t2:02d}-{table:02d}-{loop:02d}-analog{channel:d}.txt' \
+                .format(t2=t2, table=table, loop=loop, channel=c)
+        afile = Path(batch_path, job_name + s)
+        
+        log.debug('processing `{!s}`'.format(afile))
+
+        if not afile.is_file():
+            s = 'file `{!s}` does not exist'.format(afile)
+            log.error(s)
+            raise RuntimeError(s)
+        arr, count = cleanup_analogtxt(afile) # throw away count
+        analogs.append(arr)
+    return analogs
+
+def load_camera_file(job_name, batch_path, t2, table, loop):
+    s = '{t2:02d}-{table:02d}-{loop:02d}.spe' \
+            .format(t2=t2, table=table, loop=loop)
+    camera_file = Path(batch_path, job_name + s)
+    log.debug('processing `{!s}`'.format(camera_file))
+
+    if not camera_file.is_file():
+        s = 'file `{!s}` does not exist'.format(camera_file)
+        log.error(s)
+        raise RuntimeError(s)
+
+    loaded = SpeFile(camera_file)
+    log.debug('Got SpeFile: {!s}'.format(loaded))
+
+    # read header, make sure that ordering is correct
+    # Version 2.7.6 of WinSpec doesn't seem to write these things
+    # correctly...
+    # FIXME: actually look at ADC gain, LowNoise/HiCap, ADCRate, etc
+    return loaded.data
+
+def synchronize_daq_to_camera(camera_frames, analog_channels=[],
+        which_file='first', roi=0):
+    '''expects numpy array for camera_frames and a list of numpy arrays in 
+    analog channels
+
+    Behavior is slightly different if we're looking at the first file in a
+    batch vs any other file.
+    '''
+    # the constant number that the DAQ lags by is set by `offby`
+    # as of this commit, the number has been 3
+    offby = 3
+
+    log.debug('synchronizing daq to camera')
+    assert len(camera_frames.shape) == 3, \
+            'camera frames have been squeezed()'
+
+    if not len(analog_channels) > 0:
+        s = 'didn\'t get any analog channels. Got {!r}'.format(analog_channels)
+        log.error(s)
+        raise ValueError(s)
+    
+    assert len(analog_channels[0].shape) == 1, 'analog channel should be 1D'
+
+    if not all([x.shape == analog_channels[0].shape for x in \
+        analog_channels]):
+        s = 'analog channel shape differs from channel to channel. ' +\
+            'This could mean there\'s a bug in the data taking ' +\
+            'software. ' +\
+            'Got {!s}'.format([x.shape for x in analog_channels])
+        log.error(s)
+        raise RuntimeError(s)
+
+    if which_file == 'first':
+        log.debug('looking at first file in a batch')
+        # assume data has been loaded with SpeFile with the order being
+        # [ROI index, Pixel index, Frame index]
+        truncate_to = min(camera_frames.shape[2], 
+                analog_channels[0].shape[0] - offby)
+
+        log.debug('{:d}\t # of camera frames'.format(camera_frames.shape[2]))
+        log.debug('{:d}\t # of analog measurements' \
+                .format(analog_channels[0].shape[0]))
+        log.debug('{:d}\t # offby setting'.format(offby))
+        log.debug('{:d}\t # truncate to'.format(truncate_to))
+
+        assert truncate_to < analog_channels[0].shape[0]
+        assert truncate_to < camera_frames.shape[2] 
+
+        return camera_frames[roi, :, :truncate_to].squeeze(), \
+                [x[:truncate_to] for x in analog_channels]
+    else:
+        log.debug('not the first file in a batch')
+
+        truncate_to = min(camera_frames.shape[2], 
+                analog_channels[0].shape[0] - offby)
+
+        log.debug('{:d}\t # of camera frames'.format(camera_frames.shape[2]))
+        log.debug('{:d}\t # of analog measurements' \
+                .format(analog_channels[0].shape[0]))
+        log.debug('{:d}\t # offby setting'.format(offby))
+        log.debug('{:d}\t # truncate to'.format(truncate_to))
+
+        assert truncate_to < analog_channels[0].shape[0]
+        assert truncate_to < camera_frames.shape[2] 
+
+        # throw away the first offby measurements on the daq
+        # note that the order is different for throwing away measurements
+        # in comparison to the previous case
+        return camera_frames[roi, :, :truncate_to].squeeze(), \
+                [x[offby:truncate_to] for x in analog_channels]
+
+def detect_table_start(array, waveform_repeat=1):
     '''detects peaks output when the Dazzler table starts at the begining by
     looking at the discrete difference of the array.
-    
     '''
+
     diff = 2 # at least 2 Volt difference
     darr = np.diff(array)
     lohi, hilo = np.argwhere(darr > 2), np.argwhere(darr < -2)
 
-    assert len(lohi) == len(hilo), 'spike showed up as the first or last signal?'
-    if not np.allclose(hilo-lohi, repeat):
+    assert len(lohi) == len(hilo), 'spike showed up as the first or last signal'
+    if not np.allclose(hilo-lohi, waveform_repeat):
         s = 'detected incorrect repeat or a break in periodicity ' +\
             'of the table. Check that the DAQ card cable is connected ' + \
             'and dazzler synchronization is working correctly. ' + \
             'Alternatively, check the waveform repeat setting. ' + \
-            'Repeat is set to {:d}.'.format(repeat)
+            'Waveform repeat is set to {:d}.'.format(waveform_repeat)
         log.error(s)
         raise RuntimeError(s)
     # diff returns forward difference. Add one for actual peak position 
     return np.squeeze(lohi)+1 
 
-def tag_phases(table_start_detect, waveform_range, waveform_repeat=1):
+def tag_phases(table_start_detect, waveform_range, waveform_repeat=1,
+        trim_range=None):
     '''tag camera frames based on the number of waveforms and waveform repeat'''
     pass
 

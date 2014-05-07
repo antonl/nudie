@@ -39,7 +39,7 @@ class AxisCalibration(ctypes.Structure):
 class Header(ctypes.Structure):
     pass
 
-def test_headers():
+def print_offsets():
     ''' Print the attribute names, sizes and offsets in the C structure
     
     Assuming that the sizes are correct and add up to an offset of 4100 bytes, 
@@ -57,7 +57,7 @@ def test_headers():
     for i in [Header, AxisCalibration, ROIinfo]:
         fields = []
 
-        log.debug('\n{:30s}[{:4s}]\tsize'.format(i, 'offs'))
+        print('\n{:30s}[{:4s}]\tsize'.format(repr(i), 'offs'))
         
         for name,obj in inspect.getmembers(i):
             if inspect.isdatadescriptor(obj) and not inspect.ismemberdescriptor(obj) \
@@ -65,11 +65,10 @@ def test_headers():
                 
                 fields.append((name, obj))
 
-        fields.sort(key=lambda x: re.search('(?<=ofs=)([0-9]+)', str(x[1])).group(0), 
-                cmp=lambda x,y: cmp(int(x),int(y))); fields
+        fields = sorted(fields, key=lambda x: x[1].offset) 
 
         for name, obj in fields:
-            log.debug('{:30s}[{:4d}]\t{:4d}'.format(name, obj.size, obj.offset))
+            print('{:30s}[{:4d}]\t{:4d}'.format(name, obj.size, obj.offset))
 
 class SpeFile(object):
     ''' A file that represents the SPE file.
@@ -100,10 +99,12 @@ class SpeFile(object):
             f.readinto(self.header)
 
     def _read(self):
-        ''' Read the data segment of the file and create an appropriately-shaped numpy array
+        ''' Read the data segment of the file and create an appropriately-shaped 
+        numpy array
 
-        Based on the header, the right datatype is selected and returned as a numpy array.  I took 
-        the convention that the frame index is the first, followed by the x,y coordinates.
+        Based on the header, the right datatype is selected and returned as a 
+        numpy array. The indexing convention is [ROI index, Pixel index, Frame
+        index]
         '''
 
         if self._data is not None:
