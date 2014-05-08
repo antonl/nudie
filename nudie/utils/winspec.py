@@ -83,7 +83,7 @@ class SpeFile(object):
     # Map between header datatype field and numpy datatype 
     _datatype_map = {0 : np.float32, 1 : np.int32, 2 : np.int16, 3 : np.uint16}
 
-    def __init__(self, name):
+    def __init__(self, name,):
         ''' Open file `name` to read the header.'''
 
         if type(name) == str:

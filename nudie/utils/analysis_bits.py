@@ -2,6 +2,7 @@
 contains emperical voodoo that seems to make our camera and labview software
 work happily together. 
 '''
+from __future__ import division
 import logging
 log = logging.getLogger('nudie.analysis_bits')
 import itertools as it
@@ -57,7 +58,7 @@ def load_analogtxt(job_name, batch_path, t2, table, loop, nchannels=2):
         analogs.append(arr)
     return analogs
 
-def load_camera_file(job_name, batch_path, t2, table, loop):
+def load_camera_file(job_name, batch_path, t2, table, loop, force_uint16=None):
     s = '{t2:02d}-{table:02d}-{loop:02d}.spe' \
             .format(t2=t2, table=table, loop=loop)
     camera_file = Path(batch_path, job_name + s)
@@ -70,11 +71,19 @@ def load_camera_file(job_name, batch_path, t2, table, loop):
 
     loaded = SpeFile(camera_file)
     log.debug('Got SpeFile: {!s}'.format(loaded))
+    
+    if force_uint16: 
+        # try to fix datatype, it is setting 3
+        loaded.header.datatype = 3
 
     # read header, make sure that ordering is correct
     # Version 2.7.6 of WinSpec doesn't seem to write these things
     # correctly...
     # FIXME: actually look at ADC gain, LowNoise/HiCap, ADCRate, etc
+    if SpeFile._datatype_map[loaded.header.datatype] != np.uint16:
+        log.warning('spectrum recorded with potentially incorrect datatype. '+\
+                'It should probably a unsigned int16. Use force dtype ' +\
+                'setting to fix this.')
     return loaded.data
 
 def synchronize_daq_to_camera(camera_frames, analog_channels=[],
@@ -85,9 +94,14 @@ def synchronize_daq_to_camera(camera_frames, analog_channels=[],
     Behavior is slightly different if we're looking at the first file in a
     batch vs any other file.
     '''
+    # FIXME: this function specifically needs some unit tests
+
     # the constant number that the DAQ lags by is set by `offby`
     # as of this commit, the number has been 3
     offby = 3
+
+    # trim first few frames 
+    trim = 3
 
     log.debug('synchronizing daq to camera')
     assert len(camera_frames.shape) == 3, \
@@ -113,40 +127,69 @@ def synchronize_daq_to_camera(camera_frames, analog_channels=[],
         log.debug('looking at first file in a batch')
         # assume data has been loaded with SpeFile with the order being
         # [ROI index, Pixel index, Frame index]
-        truncate_to = min(camera_frames.shape[2], 
-                analog_channels[0].shape[0])
+        truncate_to = min(camera_frames.shape[2] - trim, 
+                analog_channels[0].shape[0] - trim)
 
         log.debug('{:d}\t # of camera frames'.format(camera_frames.shape[2]))
         log.debug('{:d}\t # of analog measurements' \
                 .format(analog_channels[0].shape[0]))
         log.debug('{:d}\t # offby setting'.format(offby))
+        log.debug('{:d}\t # frames to trim'.format(trim))
         log.debug('{:d}\t # truncate to'.format(truncate_to))
 
-        assert truncate_to <= analog_channels[0].shape[0]
-        assert truncate_to <= camera_frames.shape[2] 
+        assert truncate_to <= analog_channels[0].shape[0] - trim
+        assert truncate_to <= camera_frames.shape[2] - trim
 
-        return camera_frames[roi, :, :truncate_to].squeeze(), \
-                [x[:truncate_to] for x in analog_channels]
+        return camera_frames[roi, :, trim:truncate_to + trim].squeeze(), \
+                [x[trim:truncate_to + trim] for x in analog_channels]
     else:
         log.debug('not the first file in a batch')
 
-        truncate_to = min(camera_frames.shape[2], 
-                analog_channels[0].shape[0] - offby)
+        truncate_to = min(camera_frames.shape[2] - trim, 
+                analog_channels[0].shape[0] - offby - trim)
 
         log.debug('{:d}\t # of camera frames'.format(camera_frames.shape[2]))
         log.debug('{:d}\t # of analog measurements' \
                 .format(analog_channels[0].shape[0]))
         log.debug('{:d}\t # offby setting'.format(offby))
+        log.debug('{:d}\t # frames to trim'.format(trim))
         log.debug('{:d}\t # truncate to'.format(truncate_to))
 
-        assert truncate_to <= analog_channels[0].shape[0] - offby
-        assert truncate_to <= camera_frames.shape[2] 
+        assert truncate_to <= analog_channels[0].shape[0] - offby - trim
+        assert truncate_to <= camera_frames.shape[2] - trim
 
         # throw away the first offby measurements on the daq
         # note that the order is different for throwing away measurements
         # in comparison to the previous case
-        return camera_frames[roi, :, :truncate_to].squeeze(), \
-                [x[offby:truncate_to+offby] for x in analog_channels]
+        return camera_frames[roi, :, trim:truncate_to + trim].squeeze(), \
+                [x[trim+offby:truncate_to+offby+trim] for x in analog_channels]
+
+def determine_shutter_shots(camera_data):
+    '''tries to determine a range in the camera frames that have the shutter on
+    or off'''
+
+    # throw away `transition_width` shots around the found position
+    transition_width = 5    
+
+    assert len(camera_data.shape) == 2, 'got camera data with ROI'
+    power_trace = camera_data.mean(axis=0)
+    shutter_start = np.argmax(abs(np.diff(power_trace)))
+
+    assert all([shutter_start != 0, shutter_start != len(power_trace)-1]), \
+            'shutter start found at the beginning or the end of the trace'+\
+            '. This is probably horribly wrong.'
+
+    assert camera_data.shape[1] > 2*transition_width, 'camera trace too short!' 
+
+    duty_cycle = shutter_start/(power_trace.shape[0]-1)
+
+    s = 'found shutter at {:d}/{:d}. This corresponds to a shutter duty ' +\
+            'cycle of {:.0%}. Does that look right?'
+    log.info(s.format(shutter_start, len(power_trace)-1, duty_cycle))
+
+    probe_on = slice(0, shutter_start - transition_width)
+    probe_off = slice(shutter_start + transition_width, None)
+    return probe_on, probe_off, duty_cycle
 
 def detect_table_start(array, waveform_repeat=1):
     '''detects peaks output when the Dazzler table starts at the begining by
