@@ -12,11 +12,13 @@ def show_errors(level=logging.WARNING):
     log.setLevel(level)
 
 from . import utils
+from .spectrometer import simple_wavelength_axis, wavelen_to_freq
 from .utils.winspec import SpeFile
 from .utils.paths import setup_paths
 from .utils.analysis_bits import tag_phases, cleanup_analogtxt, \
     detect_table_start, synchronize_daq_to_camera, load_analogtxt, \
     determine_shutter_shots
+
     
 try:
     mount_point, data_folder = setup_paths()
@@ -25,9 +27,3 @@ except RuntimeError as e:
 
 # this must be loaded after setup_paths is run
 from .utils.batch_loader import load_job
-
-
-
-
-
-

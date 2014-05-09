@@ -173,8 +173,11 @@ def determine_shutter_shots(camera_data):
 
     assert len(camera_data.shape) == 2, 'got camera data with ROI'
     power_trace = camera_data.mean(axis=0)
-    shutter_start = np.argmax(abs(np.diff(power_trace)))
 
+    # potential FIXME: this will find the maximal change. What if shutter is opened
+    # multiple times? 
+    shutter_start = np.argmax(abs(np.diff(power_trace)))
+    
     assert all([shutter_start != 0, shutter_start != len(power_trace)-1]), \
             'shutter start found at the beginning or the end of the trace'+\
             '. This is probably horribly wrong.'
@@ -187,7 +190,7 @@ def determine_shutter_shots(camera_data):
             'cycle of {:.0%}. Does that look right?'
     log.info(s.format(shutter_start, len(power_trace)-1, duty_cycle))
 
-    probe_on = slice(0, shutter_start - transition_width)
+    probe_on = slice(None, shutter_start - transition_width)
     probe_off = slice(shutter_start + transition_width, None)
     return probe_on, probe_off, duty_cycle
 
