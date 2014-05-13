@@ -204,19 +204,76 @@ def detect_table_start(array, waveform_repeat=1):
     lohi, hilo = np.argwhere(darr > 2), np.argwhere(darr < -2)
 
     assert len(lohi) == len(hilo), 'spike showed up as the first or last signal'
-    if not np.allclose(hilo-lohi, waveform_repeat):
+
+    if lohi.shape[0] == 1:
+        s = 'only one complete dazzler table found. Are you sure' +\
+                ' you integrated for long enough?'
+        log.error(s)
+        raise RuntimeError(s)
+    else:
+        period = int(lohi[1] - lohi[0])
+
+    if not np.allclose(hilo-lohi, waveform_repeat) or \
+        not np.allclose(np.diff(lohi),  period):
+
         s = 'detected incorrect repeat or a break in periodicity ' +\
             'of the table. Check that the DAQ card cable is connected ' + \
             'and dazzler synchronization is working correctly. ' + \
             'Alternatively, check the waveform repeat setting. ' + \
             'Waveform repeat is set to {:d}.'.format(waveform_repeat)
+
         log.error(s)
         raise RuntimeError(s)
+        
     # diff returns forward difference. Add one for actual peak position 
-    return np.squeeze(lohi)+1 
+    return np.squeeze(lohi)+1, period 
 
-def tag_phases(table_start_detect, waveform_range, waveform_repeat=1,
-        trim_range=None):
+def trim_all(cdata, ais, trim_to=slice(10, -10)):
+    '''trim all outputs to given slice'''
+    assert (trim_to.step == None) or (trim_to.step == 1), +\
+            'trim_to shouldn\'t be strided.'
+
+    tai = []
+    for ai in ais: tai.append(ai[trim_to])
+    return cdata[:, trim_to], tai
+
+def tag_phases(table_start_detect, period, tags, waveform_repeat=1):
     '''tag camera frames based on the number of waveforms and waveform repeat'''
-    pass
 
+    if len(tags) < 1:
+        s = 'need at least one waveform tag. Supply a list with the ' +\
+                'waveforms in the order that they appear in the dazzler ' +\
+                'table.' 
+        log.error(s)
+        raise ValueError(s)
+    
+    full_tables = table_start_detect.shape[0] - 1
+
+    if not (period % waveform_repeat == 0):
+        s = 'waveform repeat does not divide period without remainder! ' +\
+                'Are you sure waveform_repeat and period are correct? ' +\
+                'Waveform_repeat: {:d}\tPeriod: {:d}'.format(waveform_repeat,
+                        period)
+        log.error(s)
+        raise ValueError(s)
+
+    if not (period % len(tags) == 0):
+        s = 'number of tags does not divide period without remainder! ' +\
+                'Are you sure that you set the right number of tags? ' +\
+                'Tags: {!s}\tNum Tags: {:d}\tPeriod: {:d}'.format(tags,
+                        len(tags), period)
+        log.error(s)
+        raise ValueError(s)
+    
+    tagged = list() 
+
+    for rep in range(waveform_repeat):
+        tmp = {}
+        for i,tag in enumerate(tags):
+            offset = rep + i*waveform_repeat
+            tmp[tag] = slice(offset+table_start_detect[0], \
+                    offset+table_start_detect[full_tables - 1], \
+                    period)
+        tagged.append(tmp)
+    
+    return tagged

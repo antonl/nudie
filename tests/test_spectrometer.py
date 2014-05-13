@@ -52,3 +52,12 @@ def test_same_speed_of_light():
     assert np.allclose(data, tdata)
     assert not np.allclose(tfreq, frequency)
 
+def test_simple_wavelen():
+    '''just check that one value is correct'''
+
+    with pytest.raises(ValueError):
+        nudie.spectrometer.simple_wavelength_axis(groove_density=120391)
+    
+    res = nudie.spectrometer.simple_wavelength_axis()
+    assert res.shape[0] == 1340 # correct default number of pixels
+    
