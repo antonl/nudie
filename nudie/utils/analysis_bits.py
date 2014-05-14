@@ -199,7 +199,7 @@ def detect_table_start(array, waveform_repeat=1):
     looking at the discrete difference of the array.
     '''
 
-    diff = 2 # at least 2 Volt difference
+    diff = 1.9 # ~2 Volt difference should be the TTL trigger
     darr = np.diff(array)
     lohi, hilo = np.argwhere(darr > 2), np.argwhere(darr < -2)
 
