@@ -203,7 +203,35 @@ def detect_table_start(array, waveform_repeat=1):
     darr = np.diff(array)
     lohi, hilo = np.argwhere(darr > 2), np.argwhere(darr < -2)
 
-    assert len(lohi) == len(hilo), 'spike showed up as the first or last signal'
+    # should be short cut evaluation, so second statement assumes same length
+    # arrays
+    # FIXME: THIS NEEDS UNIT TESTS! Was potentially important bug!
+    if len(lohi) != len(hilo) or not np.all(lohi < hilo):
+        log.warning('spike showed up as the first or last signal')
+        # check which one is longer, and which comes first 
+        mlen = min(len(lohi), len(hilo))
+        log.warning('minimal length is {:d}'.format(mlen))
+        if len(lohi) > mlen:
+            # order is correct, but hilo is missing a point
+            # truncate lohi at the end
+            log.warning('truncated lohi to match hilo')
+            lohi = lohi[:-1]
+            assert len(lohi) == len(hilo), 'did not help'
+        elif len(hilo) > mlen:
+            # order is incorrect, must be missing first point
+            log.warning('truncated hilo to match lohi')
+            hilo = hilo[1:]
+            assert len(lohi) == len(hilo), 'did not help'
+        elif not np.all(lohi[:mlen] < hilo[:mlen]):
+            log.warning('both sides missing, shift over one')
+            lohi, hilo = lohi[:-1], hilo[1:]
+            assert len(lohi) == len(hilo), 'did not help'
+        else:
+            assert False, "should not happen!"
+
+        mlen = max(len(lohi), len(hilo))
+        log.warning('truncating to {:d}'.format(mlen))
+        lohi, hilo = lohi[:mlen], hilo[:mlen]
 
     if lohi.shape[0] == 1:
         s = 'only one complete dazzler table found. Are you sure' +\
@@ -237,7 +265,8 @@ def trim_all(cdata, ais, trim_to=slice(10, -10)):
     for ai in ais: tai.append(ai[trim_to])
     return cdata[:, trim_to], tai
 
-def tag_phases(table_start_detect, period, tags, waveform_repeat=1):
+def tag_phases(table_start_detect, period, tags, waveform_repeat=1,
+        last_shutter_open_idx=None):
     '''tag camera frames based on the number of waveforms and waveform repeat'''
 
     if len(tags) < 1:
@@ -247,7 +276,21 @@ def tag_phases(table_start_detect, period, tags, waveform_repeat=1):
         log.error(s)
         raise ValueError(s)
     
-    full_tables = table_start_detect.shape[0] - 1
+    if last_shutter_open_idx is None:
+        last_idx = table_start_detect.shape[0] - 1
+        log.debug('shutter shots not taken into account when tagging ' +\
+                'phases')
+    else:
+        # have to do more work to figure out number of indexes
+        # the last index where table_start_detect indexes is a partial
+        # table. Take the second to last
+        last_idx = np.flatnonzero(table_start_detect < last_shutter_open_idx)[-2]
+        log.debug('last full table is number {:d}/{:d}'\
+                .format(last_idx, table_start_detect.shape[0]-1))
+        log.debug('that corresponds to index {:d}'\
+                .format(table_start_detect[last_idx]))
+        assert last_idx > 1, 'need more than one complete table!'
+        full_tables = last_idx
 
     if not (period % waveform_repeat == 0):
         s = 'waveform repeat does not divide period without remainder! ' +\
@@ -272,7 +315,7 @@ def tag_phases(table_start_detect, period, tags, waveform_repeat=1):
         for i,tag in enumerate(tags):
             offset = rep + i*waveform_repeat
             tmp[tag] = slice(offset+table_start_detect[0], \
-                    offset+table_start_detect[full_tables - 1], \
+                    table_start_detect[last_idx], \
                     period)
         tagged.append(tmp)
     
