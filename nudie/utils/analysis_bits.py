@@ -317,3 +317,14 @@ def tag_phases(table_start_detect, period, tags, waveform_repeat=1,
         tagged.append(tmp)
     
     return tagged
+
+def make_phase_cycler(phase_pairs):
+    '''given pairs of phases for pump 1 and pump 2, generates the 
+    phase inverting matrix'''
+
+    N = len(phase_pairs)
+    A = np.zeros((N,N), dtype=complex)
+    for i,(x, y) in enumerate(phase_pairs):
+        A[i] 
+    # FIXME: Work in progress
+
