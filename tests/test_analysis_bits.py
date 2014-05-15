@@ -8,8 +8,8 @@ class TestDetectTableStart:
     def test_aperiodic_middle(self):
         # simulated dazzler array
         array = np.zeros((1000,))
-        idx = 500 
-        array[idx] = 2.5 
+        idx = 500
+        array[idx] = 2.5
 
         with pytest.raises(RuntimeError):
             # should say that we found aperiodic trigger
@@ -21,9 +21,9 @@ class TestDetectTableStart:
         amplitude = 2.5
 
         array = np.zeros((1000,))
-        array[offset::period] = amplitude 
+        array[offset::period] = amplitude
 
-        found, dperiod = nudie.detect_table_start(array) 
+        found, dperiod = nudie.detect_table_start(array)
 
         assert dperiod == period, "incorrect period detected"
         assert np.all(np.where(array) == found), "positions are wrong"
@@ -35,7 +35,7 @@ class TestDetectTableStart:
         waveform_repeat = 2
         array = np.zeros((1000,))
         for i in range(waveform_repeat):
-            array[offset+i::period*waveform_repeat] = amplitude 
+            array[offset+i::period*waveform_repeat] = amplitude
         
         with pytest.raises(RuntimeError):
             # incorrect waveform setting
@@ -49,7 +49,7 @@ class TestDetectTableStart:
         correct_idx[offset::period*waveform_repeat] = amplitude
 
         assert np.all(np.where(correct_idx) == found), "positions are wrong"
-    
+
     def test_lohi_truncated(self):
         # if the trigger is on on the first sample, np.diff will
         # not give a lohi transition, only a hilo. This will make
@@ -92,7 +92,7 @@ class TestDetectTableStart:
         assert np.all(np.where(correct_idx) == found), "positions are wrong"
     
     def test_first_and_last(self):
-        # what if the trigger perfectly aligns such that the trigger is 
+        # what if the trigger perfectly aligns such that the trigger is
         # both on the first and last sample?
 
         period = 200
@@ -123,7 +123,7 @@ class TestDetectTableStart:
 
         reference = np.zeros((1010,))
         for i in range(waveform_repeat):
-            reference[offset+i::period*waveform_repeat] = amplitude 
+            reference[offset+i::period*waveform_repeat] = amplitude
         
         array = reference[offset+int(waveform_repeat//2):]
 
@@ -134,7 +134,7 @@ class TestDetectTableStart:
 
         correct_idx = np.zeros_like(array)
         correct_offset = period*waveform_repeat - int(waveform_repeat//2)
-        correct_idx[correct_offset::period*waveform_repeat] = amplitude 
+        correct_idx[correct_offset::period*waveform_repeat] = amplitude
         
         assert np.all(np.where(correct_idx) == found), "positions are wrong"
 
@@ -182,6 +182,116 @@ class TestDetectTableStart:
         assert dperiod == rep, "incorrect period found"
 
         correct_idx = np.zeros_like(array)
-        correct_idx[rep-half:-half:rep] = amplitude 
+        correct_idx[rep-half:-half:rep] = amplitude
 
         assert np.all(np.where(correct_idx) == found), "positions are wrong"
+
+class TestSynchronizeDaqToCamera:
+    def test_first_file(self):
+        N = 1000
+        diff = 3
+        saturated = 3
+        table_len = 100
+        pixels = 1340
+        rois = 1
+
+        data = np.ones((rois, pixels, N), dtype='<u2')
+        data[:, :, 0:saturated] = 1<<16 - 1 # simulate saturated frames
+        # daq recieved fewer triggers than camera
+        a1 = np.zeros((N-diff,), dtype='<u2')
+        a2 = np.zeros((N-diff,), dtype='<u2')
+        a1[::table_len] = 2.5
+        a2[::table_len] = 2.5 # pretend that a1 and a2 are identical
+
+        tdata, (ta1, ta2) = nudie.synchronize_daq_to_camera(data,
+                analog_channels=[a1, a2], which_file='first', roi=0) #first roi
+
+        # ROI is first, Pixels is second, Camera frames is third in data
+        assert tdata.shape[0] == data.shape[1], \
+                'pixel axis got trimmed!'
+        assert tdata.shape[1] == data.shape[2] - diff, \
+                'incorrect trimming of data'
+        assert ta1.shape[0] == ta2.shape[0], \
+                'analog channels have different shapes'
+        assert np.allclose(ta1, ta2), \
+                'synchronization between analog channels lost'
+        assert tdata.shape[1] == ta1.shape[0], \
+                'shape difference between analog channels and camera'
+
+    def test_not_first(self):
+        N = 1000
+        diff = 3
+        saturated = 3
+        table_len = 100
+        pixels = 1340
+        rois = 1
+
+        data = np.ones((rois, pixels, N), dtype='<u2')
+        data[:, :, 0:saturated] = 1<<16 - 1 # simulate saturated frames
+
+        # daq recieved fewer triggers than camera
+        a1 = np.zeros((N+diff,), dtype='<u2')
+        a2 = np.zeros((N+diff,), dtype='<u2')
+        a1[::table_len] = 2.5
+        a2[::table_len] = 2.5 # pretend that a1 and a2 are identical
+
+        tdata, (ta1, ta2) = nudie.synchronize_daq_to_camera(data,
+                analog_channels=[a1, a2], which_file=False, roi=0) #first roi
+
+        # ROI is first, Pixels is second, Camera frames is third in data
+        assert tdata.shape[0] == data.shape[1], \
+                'pixel axis got trimmed!'
+        assert tdata.shape[1] == N, \
+                'incorrect trimming of data'
+        assert ta1.shape[0] == ta2.shape[0], \
+                'analog channels have different shapes'
+        assert np.allclose(ta1, ta2), \
+                'synchronization between analog channels lost'
+        assert tdata.shape[1] == ta1.shape[0], \
+                'shape difference between analog channels and camera'
+        assert np.allclose(a1[diff:], ta1), \
+                'did not truncate first `diff` points in analog channel'
+
+    def test_input_checks(self):
+        with pytest.raises(AssertionError):
+            # raise wrong shape error
+            nudie.synchronize_daq_to_camera(np.zeros((1, 1), dtype='<u2'))
+
+        with pytest.raises(ValueError):
+            # raise no analog channels error
+            nudie.synchronize_daq_to_camera(np.zeros((1, 1, 1), dtype='<u2'))
+
+        with pytest.raises(RuntimeError):
+            # wrong number of measurements between channels
+            a1, a2 = np.zeros((3,), dtype='<u2'), np.zeros((4,), dtype='<u2')
+            res = nudie.synchronize_daq_to_camera(np.zeros((1, 1, 1), 
+                dtype='<u2'), analog_channels=[a1,a2], which_file=False)
+
+def test_determine_shutter_shots():
+    duty_cycle = 0.9
+    pixels = 1340
+    rois = 1
+    N = 1000
+    data = np.ones((rois,pixels,N), dtype='<u2')
+    data[:, :, :int(N*duty_cycle)] *= 1<<15-1
+    
+    with pytest.raises(AssertionError):
+        # should raise because function expects data output from 
+        # synchronize_daq_to_camera, which gets rid of ROI
+        nudie.determine_shutter_shots(data)
+    
+    with pytest.raises(AssertionError):
+        # shutter can't be at the beginning or the end
+        nudie.determine_shutter_shots(np.squeeze(data[:, :,
+            :int(N*duty_cycle)]))
+    
+    probe_on, probe_off, tduty_cycle = nudie.determine_shutter_shots(\
+            np.squeeze(data))
+
+    assert probe_on.stop < N*duty_cycle, \
+            'found wrong shutter position'
+    assert probe_off.start > N*duty_cycle, \
+            'found wrong shutter position'
+    assert abs(tduty_cycle - duty_cycle) < 1e-3, \
+            'incorrect duty cycle estimated'
+

@@ -47,7 +47,7 @@ def load_analogtxt(job_name, batch_path, t2, table, loop, nchannels=2):
         s = '{t2:02d}-{table:02d}-{loop:02d}-analog{channel:d}.txt' \
                 .format(t2=t2, table=table, loop=loop, channel=c)
         afile = Path(batch_path, job_name + s)
-        
+
         log.debug('processing `{!s}`'.format(afile))
 
         if not afile.is_file():
@@ -72,7 +72,7 @@ def load_camera_file(job_name, batch_path, t2, table, loop, force_uint16=None):
     loaded = SpeFile(camera_file)
     log.debug('Got SpeFile: {!s}'.format(loaded))
     
-    if force_uint16: 
+    if force_uint16:
         # try to fix datatype, it is setting 3
         loaded.header.datatype = 3
 
@@ -100,9 +100,6 @@ def synchronize_daq_to_camera(camera_frames, analog_channels=[],
     # as of this commit, the number has been 3
     offby = 3
 
-    # trim first few frames 
-    trim = 3
-
     log.debug('synchronizing daq to camera')
     assert len(camera_frames.shape) == 3, \
             'camera frames have been squeezed()'
@@ -123,53 +120,54 @@ def synchronize_daq_to_camera(camera_frames, analog_channels=[],
         log.error(s)
         raise RuntimeError(s)
 
+    assert all([x.shape[0] > offby for x in analog_channels]), \
+            'offby is longer than recorded analog channels'
+
     if which_file == 'first':
         log.debug('looking at first file in a batch')
         # assume data has been loaded with SpeFile with the order being
         # [ROI index, Pixel index, Frame index]
-        truncate_to = min(camera_frames.shape[2] - trim, 
-                analog_channels[0].shape[0] - trim)
+        truncate_to = min(camera_frames.shape[2],
+                analog_channels[0].shape[0])
 
         log.debug('{:d}\t # of camera frames'.format(camera_frames.shape[2]))
         log.debug('{:d}\t # of analog measurements' \
                 .format(analog_channels[0].shape[0]))
         log.debug('{:d}\t # offby setting'.format(offby))
-        log.debug('{:d}\t # frames to trim'.format(trim))
         log.debug('{:d}\t # truncate to'.format(truncate_to))
 
-        assert truncate_to <= analog_channels[0].shape[0] - trim
-        assert truncate_to <= camera_frames.shape[2] - trim
+        assert truncate_to <= analog_channels[0].shape[0]
+        assert truncate_to <= camera_frames.shape[2]
 
-        return camera_frames[roi, :, trim:truncate_to + trim].squeeze(), \
-                [x[trim:truncate_to + trim] for x in analog_channels]
+        return camera_frames[roi, :, :truncate_to].squeeze(), \
+                [x[:truncate_to] for x in analog_channels]
     else:
         log.debug('not the first file in a batch')
 
-        truncate_to = min(camera_frames.shape[2] - trim, 
-                analog_channels[0].shape[0] - offby - trim)
+        truncate_to = min(camera_frames.shape[2],
+                analog_channels[0].shape[0] - offby)
 
         log.debug('{:d}\t # of camera frames'.format(camera_frames.shape[2]))
         log.debug('{:d}\t # of analog measurements' \
                 .format(analog_channels[0].shape[0]))
         log.debug('{:d}\t # offby setting'.format(offby))
-        log.debug('{:d}\t # frames to trim'.format(trim))
         log.debug('{:d}\t # truncate to'.format(truncate_to))
 
-        assert truncate_to <= analog_channels[0].shape[0] - offby - trim
-        assert truncate_to <= camera_frames.shape[2] - trim
+        assert truncate_to <= analog_channels[0].shape[0] - offby
+        assert truncate_to <= camera_frames.shape[2]
 
         # throw away the first offby measurements on the daq
         # note that the order is different for throwing away measurements
         # in comparison to the previous case
-        return camera_frames[roi, :, trim:truncate_to + trim].squeeze(), \
-                [x[trim+offby:truncate_to+offby+trim] for x in analog_channels]
+        return camera_frames[roi, :, :truncate_to].squeeze(), \
+                [x[offby:truncate_to+offby] for x in analog_channels]
 
 def determine_shutter_shots(camera_data):
     '''tries to determine a range in the camera frames that have the shutter on
     or off'''
 
     # throw away `transition_width` shots around the found position
-    transition_width = 5    
+    transition_width = 5
 
     assert len(camera_data.shape) == 2, 'got camera data with ROI'
     power_trace = camera_data.mean(axis=0)
@@ -182,7 +180,7 @@ def determine_shutter_shots(camera_data):
             'shutter start found at the beginning or the end of the trace'+\
             '. This is probably horribly wrong.'
 
-    assert camera_data.shape[1] > 2*transition_width, 'camera trace too short!' 
+    assert camera_data.shape[1] > 2*transition_width, 'camera trace too short!'
 
     duty_cycle = shutter_start/(power_trace.shape[0]-1)
 
@@ -205,7 +203,6 @@ def detect_table_start(array, waveform_repeat=1):
 
     # should be short cut evaluation, so second statement assumes same length
     # arrays
-    # FIXME: THIS NEEDS UNIT TESTS! Was potentially important bug!
     if len(lohi) != len(hilo) or not np.all(lohi < hilo):
         log.warning('spike showed up as the first or last signal')
         # check which one is longer, and which comes first 
@@ -254,7 +251,7 @@ def detect_table_start(array, waveform_repeat=1):
         raise RuntimeError(s)
         
     # diff returns forward difference. Add one for actual peak position 
-    return np.squeeze(lohi)+1, period 
+    return np.squeeze(lohi)+1, period
 
 def trim_all(cdata, ais, trim_to=slice(10, -10)):
     '''trim all outputs to given slice'''
@@ -308,7 +305,7 @@ def tag_phases(table_start_detect, period, tags, waveform_repeat=1,
         log.error(s)
         raise ValueError(s)
     
-    tagged = list() 
+    tagged = list()
 
     for rep in range(waveform_repeat):
         tmp = {}
