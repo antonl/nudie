@@ -295,3 +295,5 @@ def test_determine_shutter_shots():
     assert abs(tduty_cycle - duty_cycle) < 1e-3, \
             'incorrect duty cycle estimated'
 
+def test_tag_phases():
+    pass

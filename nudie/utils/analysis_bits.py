@@ -265,6 +265,9 @@ def trim_all(cdata, ais, trim_to=slice(10, -10)):
 def tag_phases(table_start_detect, period, tags, waveform_repeat=1,
         last_shutter_open_idx=None):
     '''tag camera frames based on the number of waveforms and waveform repeat'''
+    # TODO: I can actually not drop frames in the beginning by using the
+    # detected period. Taking the period and subtracting the location of the
+    # first Dazzler trigger yields the current wavetable position.
 
     if len(tags) < 1:
         s = 'need at least one waveform tag. Supply a list with the ' +\
@@ -273,6 +276,9 @@ def tag_phases(table_start_detect, period, tags, waveform_repeat=1,
         log.error(s)
         raise ValueError(s)
     
+    # FIXME: this isn't quite right. I should probably group the shutter open
+    # and shutter closed shots in the same pass. I can then subtract the pump
+    # scatter that is specific to each phase.
     if last_shutter_open_idx is None:
         last_idx = table_start_detect.shape[0] - 1
         log.debug('shutter shots not taken into account when tagging ' +\
@@ -325,6 +331,6 @@ def make_phase_cycler(phase_pairs):
     N = len(phase_pairs)
     A = np.zeros((N,N), dtype=complex)
     for i,(x, y) in enumerate(phase_pairs):
-        A[i] 
+        A[i]
     # FIXME: Work in progress
 
