@@ -1,6 +1,7 @@
 # make sure things work in a uniform way
 from __future__ import division, absolute_import, unicode_literals, print_function
 import logging
+import pdb
 
 __all__ = ['gather_information', 'setup_paths']
 
@@ -46,13 +47,13 @@ def setup_paths():
             mount_point = Path('Z:/')
         else:
             mount_point = None
-    
+
     # check that the mount point exists
-    if mount_point is not None and not mount_point.exists():
+    if mount_point is None or not mount_point.exists():
         s = 'mount_point path is incorrect. `{mp!s}` does not exist.'.format(mp=mount_point)
         log.error(s)
         raise RuntimeError(s)
-        
+
     data_folder = mount_point / Path('2D/Data')
 
     # check that the mount point exists
