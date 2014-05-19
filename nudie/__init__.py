@@ -17,7 +17,8 @@ from .utils.winspec import SpeFile
 from .utils.paths import setup_paths
 from .utils.analysis_bits import tag_phases, cleanup_analogtxt, \
     detect_table_start, synchronize_daq_to_camera, load_analogtxt, \
-    determine_shutter_shots, load_camera_file, trim_all
+    determine_shutter_shots, load_camera_file, trim_all, \
+    make_6phase_cycler
 
     
 try:

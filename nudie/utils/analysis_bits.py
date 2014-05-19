@@ -9,6 +9,9 @@ import itertools as it
 import numpy as np
 from pathlib import Path
 from .. import SpeFile
+from scipy.signal import get_window, find_peaks_cwt
+from scipy.fftpack import fft, fftshift, fftfreq
+from .. import wavelen_to_freq
 
 def repeatn(iter, n=1):
     '''repeat each item in an iterator n times'''
@@ -258,16 +261,15 @@ def trim_all(cdata, ais, trim_to=slice(10, -10)):
     assert (trim_to.step == None) or (trim_to.step == 1), +\
             'trim_to shouldn\'t be strided.'
 
+    assert len(cdata.shape) == 2, 'camera shouldn\'t have ROI anymore'
     tai = []
     for ai in ais: tai.append(ai[trim_to])
     return cdata[:, trim_to], tai
 
 def tag_phases(table_start_detect, period, tags, waveform_repeat=1,
-        last_shutter_open_idx=None):
+        shutter_info=None):
     '''tag camera frames based on the number of waveforms and waveform repeat'''
-    # TODO: I can actually not drop frames in the beginning by using the
-    # detected period. Taking the period and subtracting the location of the
-    # first Dazzler trigger yields the current wavetable position.
+    # FIXME: period is actually num_waveforms * waveform_repeat!!
 
     if len(tags) < 1:
         s = 'need at least one waveform tag. Supply a list with the ' +\
@@ -279,8 +281,7 @@ def tag_phases(table_start_detect, period, tags, waveform_repeat=1,
     # FIXME: this isn't quite right. I should probably group the shutter open
     # and shutter closed shots in the same pass. I can then subtract the pump
     # scatter that is specific to each phase.
-    if last_shutter_open_idx is None:
-        last_idx = table_start_detect.shape[0] - 1
+    if shutter_info is None:
         log.debug('shutter shots not taken into account when tagging ' +\
                 'phases')
     else:
@@ -310,27 +311,96 @@ def tag_phases(table_start_detect, period, tags, waveform_repeat=1,
                         len(tags), period)
         log.error(s)
         raise ValueError(s)
+
+    if shutter_info and \
+            not ['last open idx', 'first closed idx'] in shutter_info.keys():
+        s = 'invalid shutter info dict. Need \'last open idx\' and ' +\
+                '\'first closed idx\' keys'
+        log.error(s)
+        raise ValueError(s)
     
     tagged = list()
 
+    start_phase = period - table_start_detect[0]
+    assert start_phase > 0, \
+        'had partial table at the beginning that is longer ' +\
+        'than total periodicity'
+
+    # determine which is the first phase
+    partial = 0 if (start_phase % waveform_repeat) == 0 else 1 
+    ctags = it.cycle(tags) # rotate tags to compensate for that
+    N = int(start_phase // (len(tags)*waveform_repeat)) # complete phase cycles
+    M = int(period // (len(tags)*waveform_repeat)) - N # incomplete phase cycles in the beginning
+    
+    for i in range(M - partial): # rotate forward M or M-1 times
+        next(ctags)
+
+    # FIXME: refactor to split shutter info case and no shutter case
     for rep in range(waveform_repeat):
         tmp = {}
-        for i,tag in enumerate(tags):
-            offset = rep + i*waveform_repeat
-            tmp[tag] = slice(offset+table_start_detect[0], \
-                    table_start_detect[last_idx], \
-                    period)
+        for i,tag in enumerate(it.islice(ctags, len(tags))):
+            if not shutter_info:  # assume all data is shutter open
+                offset = rep + i*waveform_repeat
+                tmp[tag] = {'shutter open': slice(offset, None, period),
+                        'shutter closed': None}
+            else: # assume we have shutter info        
+                offset = rep + i*waveform_repeat
+                open = slice(offset, shutter_info['last open idx'], period),
+                closed = 
         tagged.append(tmp)
-    
     return tagged
 
-def make_phase_cycler(phase_pairs):
+def identify_prd_peak(wl, data, window=None, axes=None):
+    assert len(data.shape) == 1, 'expected spectrum averaged over ' +\
+            'camera frames'
+    peak_widths = np.arange(5, 200, 5)
+    threshold = 0.001 # fraction of DC peak 
+
+    if window:
+        # for future
+        raise NotImplementedError('don\'t know how to use a custom window')
+    
+    window = get_window(('kaiser', 11), len(prd), fftbins=False)
+
+    freq, prd, df = wavelen_to_freq(wl, data, ret_df=True)
+    time = fftshift(fftfreq(len(freq), df))
+    ft = fftshift(abs(fft(prd*window)))
+
+    res = np.array(find_peaks_cwt(ft, peak_widths, min_length=3))
+    select = ft[res] > threshold*np.max(ft)
+    prd_idx = res[select][-1]
+
+    if axes:
+        # going to plot stuff to axes
+        axes.plot(time, ft)
+        next_highest = ft[res[select][-1]]
+        axes.set_ylim(0, 1.1*next_highest)
+        #axes.set_xlim(time[prd_idx]-, time[prd_idx])
+        axes.vlines(time[res], 0, next_highest, color='r')
+
+    log.info('found PRD at {:.1f} fs'.format(time[prd_idx]))
+
+    return prd_idx, time
+
+def make_6phase_cycler(phase_pairs):
     '''given pairs of phases for pump 1 and pump 2, generates the 
     phase inverting matrix'''
 
     N = len(phase_pairs)
     A = np.zeros((N,N), dtype=complex)
     for i,(x, y) in enumerate(phase_pairs):
-        A[i]
-    # FIXME: Work in progress
+        A[i, 0] = np.exp(1j*(x-y))
+        A[i, 1] = np.exp(-1j*(x-y))
+        A[i, 2] = 1
+    mat_inv = np.inv(mat)
 
+    def wrapped(*SI):
+        # TODO: test this. not sure that the tensor dot works like I expect
+        assert len(SI) == 6, 'need 6 phases to do 6 phase cycling'
+        R1, NR1, TG1, R2, NR2, TG2 = SI
+        R = 0.5*(R1 + R2)
+        NR = 0.5*(NR1 + NR2)
+        TG = 0.5*(TG1 + TG2)
+        res = np.tensordot(mat_inv, np.array([R, NR, TG]), [[1],[0]])
+        return res[0, :], res[1,:], res[2,:]
+    return wrapped
