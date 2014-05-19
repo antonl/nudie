@@ -319,23 +319,40 @@ def tag_phases(table_start_detect, period, tags, waveform_repeat=1,
         log.error(s)
         raise ValueError(s)
     
-    tagged = list()
-
-    start_phase = period - table_start_detect[0]
-    assert start_phase > 0, \
+    period_index = period - table_start_detect[0] - 1 # index to number conversion
+    assert period_index > 0, \
         'had partial table at the beginning that is longer ' +\
         'than total periodicity'
 
     # determine which is the first phase
-    partial = 0 if (start_phase % waveform_repeat) == 0 else 1 
     ctags = it.cycle(tags) # rotate tags to compensate for that
-    N = int(start_phase // (len(tags)*waveform_repeat)) # complete phase cycles
-    M = int(period // (len(tags)*waveform_repeat)) - N # incomplete phase cycles in the beginning
+
+    N = period_index % (waveform_repeat*len(tags)) # incomplete phases
     
-    for i in range(M - partial): # rotate forward M or M-1 times
+    first_waveform = (period - N) // (waveform_repeat*len(tags))
+
+    # TODO: Check this for off by one
+    for i in range(N // len(tags)): # rotate forward M or M-1 times
         next(ctags)
 
+    if not shutter_info:
+        # assume shutter is open the whole time
+        tagged = list()
+        for rep in range(waveform_repeat):
+            tmp = {}
+            for i,tag in enumerate(it.islice(ctags, len(tags))):
+                if not shutter_info:  # assume all data is shutter open
+                    offset = rep + i*waveform_repeat
+                    tmp[tag] = {'shutter open': slice(offset, None, period),
+                            'shutter closed': None,
+                            'first waveform': first_waveform}
+        return tagged
+
+    M = (shutter_info['first closed idx'] + 1) % period
+    M // (waveform_repeat*len(tags))
+
     # FIXME: refactor to split shutter info case and no shutter case
+    tagged = list()
     for rep in range(waveform_repeat):
         tmp = {}
         for i,tag in enumerate(it.islice(ctags, len(tags))):
