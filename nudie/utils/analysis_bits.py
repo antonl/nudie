@@ -332,25 +332,27 @@ def tag_phases(table_start_detect, period, tags, waveform_repeat=1,
     if skip_repeats != 0: 
         next(ctags[0]) # roll over phase counter if reps roll over
 
-    j = ((period_index - skip_repeats - waveform_repeat*skip_phases) % period) // (waveform_repeat*nphases)
+    # FIXME work in progress
+    min_waveform = ((period_index - skip_repeats - \
+            waveform_repeat*skip_phases) % period) // (waveform_repeat*nphases)
 
     tagged = {}
     for rep in it.islice(crep, skip_repeats, waveform_repeat + skip_repeats):
         tmp = {}
 
         for i, tag in enumerate(it.islice(ctags[rep], skip_phases, nphases+skip_phases)):
-            repeats = (skip_repeats + rep) % waveform_repeat
+            repeats = (skip_repeats - rep) % waveform_repeat
             offset = repeats + i*waveform_repeat
             open = slice(offset, shutter_info['last open idx'],
                     waveform_repeat*nphases)
-            k = (shutter_info['first closed idx'] - offset) // (waveform_repeat*nphases)
-            closed = slice(offset + k*waveform_repeat*nphases, 
+            k = (shutter_info['first closed idx'] - offset) // (waveform_repeat*nphases) 
+            closed = slice(offset + (k+1)*waveform_repeat*nphases, 
                     None, waveform_repeat*nphases)
+
             tmp[tag] = {'shutter open': open,
                     'shutter closed': closed,
-                    'waveform shutter open': j,
-                    'waveform shutter closed': waveform + nwaveforms,}
-            pdb.set_trace()
+                    'waveform shutter open': min_waveform,
+                    'waveform shutter closed': min_waveform}
         tagged.update({rep: tmp})
     return tagged
 

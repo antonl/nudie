@@ -312,12 +312,12 @@ def test_determine_shutter_shots():
             'incorrect duty cycle estimated'
 
 def test_tag_phases():
-    duty_cycle = 0.9
+    duty_cycle = 0.5
     transition_width = 3
-    N = 50 
+    N = 100 
     offset = 3
     repeat = 2
-    num_waveforms = 2 
+    num_waveforms = 6 
     num_phases = 3 
     data = np.zeros((N, 4), dtype=object)
 
@@ -366,9 +366,11 @@ def test_tag_phases():
                 assert np.all(data[select, 0] == rep), 'repeat was not correct'
                 assert np.all(data[select, 2] == tag), 'phase was different'
 
+                # FIXME: incorrect test for more than two waveforms,
+                # instead check periodicity of negative transitions
                 diff = np.diff(data[select, 1])
                 assert np.all(abs(diff[1:]) == 1), \
                         'waveforms not monotonically increasing'
-                assert 0
+
                 #assert tagged[rep][tag]['second waveform'] == \
                 #        data[first_shutter_closed_idx, 1]
