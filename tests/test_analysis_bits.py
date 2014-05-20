@@ -366,11 +366,15 @@ def test_tag_phases():
                 assert np.all(data[select, 0] == rep), 'repeat was not correct'
                 assert np.all(data[select, 2] == tag), 'phase was different'
 
-                # FIXME: incorrect test for more than two waveforms,
-                # instead check periodicity of negative transitions
                 diff = np.diff(data[select, 1])
-                assert np.all(abs(diff[1:]) == 1), \
-                        'waveforms not monotonically increasing'
+                assert np.all(np.diff(np.where(diff == (num_phases - 1))) ==\
+                        num_phases), 'waveforms not appropriately periodic'
 
-                #assert tagged[rep][tag]['second waveform'] == \
-                #        data[first_shutter_closed_idx, 1]
+                # FIXME add test for monotonic increase of waveforms
+
+                if shutter == 'shutter open':
+                    assert data[select, 1][0] == \
+                            tagged[rep][tag]['waveform shutter open']
+                else:
+                    assert data[select, 1][0] == \
+                            tagged[rep][tag]['waveform shutter closed']

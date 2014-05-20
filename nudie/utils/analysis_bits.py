@@ -13,8 +13,6 @@ from scipy.signal import get_window, find_peaks_cwt
 from scipy.fftpack import fft, fftshift, fftfreq
 from .. import wavelen_to_freq
 
-import pdb
-
 def repeatn(iter, n=1):
     '''repeat each item in an iterator n times'''
     for item in iter:
@@ -333,8 +331,7 @@ def tag_phases(table_start_detect, period, tags, waveform_repeat=1,
         next(ctags[0]) # roll over phase counter if reps roll over
 
     # FIXME work in progress
-    min_waveform = ((period_index - skip_repeats - \
-            waveform_repeat*skip_phases) % period) // (waveform_repeat*nphases)
+    min_waveform = period_index  // (waveform_repeat*nphases) 
 
     tagged = {}
     for rep in it.islice(crep, skip_repeats, waveform_repeat + skip_repeats):
@@ -348,11 +345,13 @@ def tag_phases(table_start_detect, period, tags, waveform_repeat=1,
             k = (shutter_info['first closed idx'] - offset) // (waveform_repeat*nphases) 
             closed = slice(offset + (k+1)*waveform_repeat*nphases, 
                     None, waveform_repeat*nphases)
-
+            first_waveform = min_waveform + (skip_repeats + \
+                    waveform_repeat*skip_phases + offset) // (waveform_repeat*nphases)            
             tmp[tag] = {'shutter open': open,
                     'shutter closed': closed,
-                    'waveform shutter open': min_waveform,
-                    'waveform shutter closed': min_waveform}
+                    'waveform shutter open': first_waveform,
+                    'waveform shutter closed': (first_waveform +\
+                        (k+1))%(waveform_repeat*nphases)}
         tagged.update({rep: tmp})
     return tagged
 
