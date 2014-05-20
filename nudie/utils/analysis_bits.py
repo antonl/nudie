@@ -13,6 +13,8 @@ from scipy.signal import get_window, find_peaks_cwt
 from scipy.fftpack import fft, fftshift, fftfreq
 from .. import wavelen_to_freq
 
+import pdb
+
 def repeatn(iter, n=1):
     '''repeat each item in an iterator n times'''
     for item in iter:
@@ -284,18 +286,23 @@ def tag_phases(table_start_detect, period, tags, waveform_repeat=1,
     if shutter_info is None:
         log.debug('shutter shots not taken into account when tagging ' +\
                 'phases')
-    else:
-        # have to do more work to figure out number of indexes
-        # the last index where table_start_detect indexes is a partial
-        # table. Take the second to last
-        last_idx = np.flatnonzero(table_start_detect < last_shutter_open_idx)[-2]
-        log.debug('last full table is number {:d}/{:d}'\
-                .format(last_idx, table_start_detect.shape[0]-1))
-        log.debug('that corresponds to index {:d}'\
-                .format(table_start_detect[last_idx]))
-        assert last_idx > 1, 'need more than one complete table!'
-        full_tables = last_idx
 
+    elif shutter_info and \
+            not all([x in shutter_info.keys() for x in ['last open idx', 
+                'first closed idx']]):
+        s = 'invalid shutter info dict. Need \'last open idx\' and ' +\
+                '\'first closed idx\' keys'
+        log.error(s)
+        raise ValueError(s)
+    else:
+        log.debug('using shutter info, it has the right keys. {!s}'\
+                .format(shutter_info))
+    
+    period_index = period - table_start_detect[0] - 1
+
+    assert period_index > 0, \
+        'had partial table at the beginning that is longer ' +\
+        'than total periodicity'
     if not (period % waveform_repeat == 0):
         s = 'waveform repeat does not divide period without remainder! ' +\
                 'Are you sure waveform_repeat and period are correct? ' +\
@@ -312,58 +319,53 @@ def tag_phases(table_start_detect, period, tags, waveform_repeat=1,
         log.error(s)
         raise ValueError(s)
 
-    if shutter_info and \
-            not ['last open idx', 'first closed idx'] in shutter_info.keys():
-        s = 'invalid shutter info dict. Need \'last open idx\' and ' +\
-                '\'first closed idx\' keys'
-        log.error(s)
-        raise ValueError(s)
-    
-    period_index = period - table_start_detect[0] - 1 # index to number conversion
-    assert period_index > 0, \
-        'had partial table at the beginning that is longer ' +\
-        'than total periodicity'
 
     # determine which is the first phase
     ctags = it.cycle(tags) # rotate tags to compensate for that
 
     N = period_index % (waveform_repeat*len(tags)) # incomplete phases
-    
     first_waveform = (period - N) // (waveform_repeat*len(tags))
+    first_partials = period_index % waveform_repeat
 
-    # TODO: Check this for off by one
-    for i in range(N // len(tags)): # rotate forward M or M-1 times
+    for i in range(N // waveform_repeat): 
         next(ctags)
 
     if not shutter_info:
         # assume shutter is open the whole time
+        raise NotImplementedError('need to recheck this, do not use')
         tagged = list()
         for rep in range(waveform_repeat):
             tmp = {}
             for i,tag in enumerate(it.islice(ctags, len(tags))):
                 if not shutter_info:  # assume all data is shutter open
-                    offset = rep + i*waveform_repeat
-                    tmp[tag] = {'shutter open': slice(offset, None, period),
+                    offset = (first_partials - rep) + i*waveform_repeat
+                    tmp[tag] = {'shutter open': slice(offset, None,
+                        waveform_repeat*len(tags)),
                             'shutter closed': None,
-                            'first waveform': first_waveform}
+                            'first waveform': first_waveform,
+                            'second waveform': None}
         return tagged
 
-    M = (shutter_info['first closed idx'] + 1) % period
-    M // (waveform_repeat*len(tags))
+    shutter_closed_idx = (shutter_info['first closed idx'] + 1) % period
+    second_waveform = (period - shutter_closed_idx) // (waveform_repeat*len(tags)) # complete waveforms
+    j = shutter_closed_idx % (waveform_repeat*len(tags)) # partial phases, repeats
+    full_phases = j // waveform_repeat # complete_phases
+    partial_repeats = j % waveform_repeat
 
-    # FIXME: refactor to split shutter info case and no shutter case
     tagged = list()
-    for rep in range(waveform_repeat):
+    for rep in it.islice(it.cycle(range(waveform_repeat)), :
         tmp = {}
-        for i,tag in enumerate(it.islice(ctags, len(tags))):
-            if not shutter_info:  # assume all data is shutter open
-                offset = rep + i*waveform_repeat
-                tmp[tag] = {'shutter open': slice(offset, None, period),
-                        'shutter closed': None}
-            else: # assume we have shutter info        
-                offset = rep + i*waveform_repeat
-                open = slice(offset, shutter_info['last open idx'], period),
-                closed = 
+        for i, tag in enumerate(it.islice(ctags, len(tags))):
+            offset = (first_partials - rep) + i*waveform_repeat
+            open = slice(offset, shutter_info['last open idx'],
+                    waveform_repeat*len(tags))
+            closed = slice(shutter_info['first closed idx'] + \
+                    (rep - partial_repeats) + \
+                    (j - i)*waveform_repeat, None, waveform_repeat*len(tags))
+            tmp[tag] = {'shutter open': open,
+                    'shutter closed': closed,
+                    'first waveform': first_waveform,
+                    'second waveform': second_waveform}
         tagged.append(tmp)
     return tagged
 
