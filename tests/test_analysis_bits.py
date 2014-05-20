@@ -313,8 +313,8 @@ def test_determine_shutter_shots():
 
 def test_tag_phases():
     duty_cycle = 0.9
-    transition_width = 10
-    N = 50  + transition_width
+    transition_width = 3
+    N = 50 
     offset = 3
     repeat = 2
     num_waveforms = 2 
@@ -326,8 +326,12 @@ def test_tag_phases():
         data[r + p*repeat + w*repeat*num_phases \
                 ::repeat*num_phases*num_waveforms] = (r, w, p, 0) 
     # set shutter
-    data[:int(N*duty_cycle), 3] = 1
-    data[int(N*duty_cycle)+transition_width:, 3] = 2
+    last_on = int(N*duty_cycle)
+    assert  (last_on + transition_width) < N, "not enough samples for that "+\
+            "transition width"
+
+    data[:last_on+1, 3] = 1
+    data[last_on+transition_width:, 3] = 2
     
     analog1 = np.zeros((N,), dtype=float)    
     for r in range(repeat):
@@ -339,34 +343,32 @@ def test_tag_phases():
     
     start, period = nudie.detect_table_start(analog1, repeat)
     
-    last_shutter_open_idx = int(N*duty_cycle) - 1
-    first_shutter_closed_idx = int(N*duty_cycle) + transition_width
+    shutter_info = {'last open idx': last_on - offset,
+            'first closed idx' : last_on+transition_width - offset}
 
-    shutter_info = {'last open idx': last_shutter_open_idx,
-            'first closed idx' : first_shutter_closed_idx}
     tags = range(num_phases)
     tagged = nudie.tag_phases(start, period, tags, repeat,
             shutter_info=shutter_info)
 
     ctags = it.cycle(tags)
+    creps = it.cycle(range(repeat))
 
-    for rep in it.islice(it.cycle(range(repeat)), data[0, 0], repeat):
-        for i, tag in enumerate(it.islice(ctags, data[0, 2], num_phases)):
+    for rep in it.islice(creps, data[0, 0], repeat+data[0,0]):
+        for i, tag in enumerate(it.islice(ctags, data[0, 2], num_phases + data[0,2])):
             for shutter in ['shutter open', 'shutter closed']:
                 select = tagged[rep][tag][shutter]
 
                 shutter_val = 1 if shutter == 'shutter open' else 2
 
-                assert select.start > 0, 'no negative index is allowed'
+                assert select.start >= 0, 'no negative index is allowed'
                 assert np.all(data[select, 3] == shutter_val), \
                         'shutter was not open'
-                assert np.all(data[select, 0] == data[0, 0] - rep), 'repeat was not correct'
-                assert np.all(data[select, 1] == tag), 'phase was different'
+                assert np.all(data[select, 0] == rep), 'repeat was not correct'
+                assert np.all(data[select, 2] == tag), 'phase was different'
 
-                assert 0
                 diff = np.diff(data[select, 1])
-                assert np.all(diff[1:] == 1), \
+                assert np.all(abs(diff[1:]) == 1), \
                         'waveforms not monotonically increasing'
-                assert tagged[rep][tag]['first waveform'] == data[0, 1]
-                assert tagged[rep][tag]['second waveform'] == \
-                        data[first_shutter_closed_idx, 1]
+                assert 0
+                #assert tagged[rep][tag]['second waveform'] == \
+                #        data[first_shutter_closed_idx, 1]

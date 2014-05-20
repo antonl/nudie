@@ -273,7 +273,8 @@ def tag_phases(table_start_detect, period, tags, waveform_repeat=1,
     '''tag camera frames based on the number of waveforms and waveform repeat'''
     # FIXME: period is actually num_waveforms * waveform_repeat!!
 
-    if len(tags) < 1:
+    nphases = len(tags)
+    if nphases < 1:
         s = 'need at least one waveform tag. Supply a list with the ' +\
                 'waveforms in the order that they appear in the dazzler ' +\
                 'table.' 
@@ -286,7 +287,7 @@ def tag_phases(table_start_detect, period, tags, waveform_repeat=1,
     if shutter_info is None:
         log.debug('shutter shots not taken into account when tagging ' +\
                 'phases')
-
+        raise NotImplementedError('please pass shutter info')
     elif shutter_info and \
             not all([x in shutter_info.keys() for x in ['last open idx', 
                 'first closed idx']]):
@@ -298,7 +299,7 @@ def tag_phases(table_start_detect, period, tags, waveform_repeat=1,
         log.debug('using shutter info, it has the right keys. {!s}'\
                 .format(shutter_info))
     
-    period_index = period - table_start_detect[0] - 1
+    period_index = period - 1 - table_start_detect[0]
 
     assert period_index > 0, \
         'had partial table at the beginning that is longer ' +\
@@ -311,62 +312,46 @@ def tag_phases(table_start_detect, period, tags, waveform_repeat=1,
         log.error(s)
         raise ValueError(s)
 
-    if not (period % len(tags) == 0):
+    if not (period % nphases == 0):
         s = 'number of tags does not divide period without remainder! ' +\
                 'Are you sure that you set the right number of tags? ' +\
                 'Tags: {!s}\tNum Tags: {:d}\tPeriod: {:d}'.format(tags,
-                        len(tags), period)
+                        nphases, period)
         log.error(s)
         raise ValueError(s)
 
+    # Tee is very important, Otherwise we move the cycler forward 
+    # for each rep and lose synchronization
+    ctags = it.tee(it.cycle(tags), waveform_repeat)
+    crep = it.cycle(range(waveform_repeat))
+    # What is the repeat setting?  
+    skip_repeats = int((period_index + 1) % waveform_repeat)
+    # What is the current phase?
+    skip_phases = int((period_index - skip_repeats + 1) // (waveform_repeat))
+    
+    if skip_repeats != 0: 
+        next(ctags[0]) # roll over phase counter if reps roll over
 
-    # determine which is the first phase
-    ctags = it.cycle(tags) # rotate tags to compensate for that
+    j = ((period_index - skip_repeats - waveform_repeat*skip_phases) % period) // (waveform_repeat*nphases)
 
-    N = period_index % (waveform_repeat*len(tags)) # incomplete phases
-    first_waveform = (period - N) // (waveform_repeat*len(tags))
-    first_partials = period_index % waveform_repeat
-
-    for i in range(N // waveform_repeat): 
-        next(ctags)
-
-    if not shutter_info:
-        # assume shutter is open the whole time
-        raise NotImplementedError('need to recheck this, do not use')
-        tagged = list()
-        for rep in range(waveform_repeat):
-            tmp = {}
-            for i,tag in enumerate(it.islice(ctags, len(tags))):
-                if not shutter_info:  # assume all data is shutter open
-                    offset = (first_partials - rep) + i*waveform_repeat
-                    tmp[tag] = {'shutter open': slice(offset, None,
-                        waveform_repeat*len(tags)),
-                            'shutter closed': None,
-                            'first waveform': first_waveform,
-                            'second waveform': None}
-        return tagged
-
-    shutter_closed_idx = (shutter_info['first closed idx'] + 1) % period
-    second_waveform = (period - shutter_closed_idx) // (waveform_repeat*len(tags)) # complete waveforms
-    j = shutter_closed_idx % (waveform_repeat*len(tags)) # partial phases, repeats
-    full_phases = j // waveform_repeat # complete_phases
-    partial_repeats = j % waveform_repeat
-
-    tagged = list()
-    for rep in it.islice(it.cycle(range(waveform_repeat)), :
+    tagged = {}
+    for rep in it.islice(crep, skip_repeats, waveform_repeat + skip_repeats):
         tmp = {}
-        for i, tag in enumerate(it.islice(ctags, len(tags))):
-            offset = (first_partials - rep) + i*waveform_repeat
+
+        for i, tag in enumerate(it.islice(ctags[rep], skip_phases, nphases+skip_phases)):
+            repeats = (skip_repeats + rep) % waveform_repeat
+            offset = repeats + i*waveform_repeat
             open = slice(offset, shutter_info['last open idx'],
-                    waveform_repeat*len(tags))
-            closed = slice(shutter_info['first closed idx'] + \
-                    (rep - partial_repeats) + \
-                    (j - i)*waveform_repeat, None, waveform_repeat*len(tags))
+                    waveform_repeat*nphases)
+            k = (shutter_info['first closed idx'] - offset) // (waveform_repeat*nphases)
+            closed = slice(offset + k*waveform_repeat*nphases, 
+                    None, waveform_repeat*nphases)
             tmp[tag] = {'shutter open': open,
                     'shutter closed': closed,
-                    'first waveform': first_waveform,
-                    'second waveform': second_waveform}
-        tagged.append(tmp)
+                    'waveform shutter open': j,
+                    'waveform shutter closed': waveform + nwaveforms,}
+            pdb.set_trace()
+        tagged.update({rep: tmp})
     return tagged
 
 def identify_prd_peak(wl, data, window=None, axes=None):
