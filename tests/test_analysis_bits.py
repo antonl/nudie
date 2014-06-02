@@ -367,8 +367,9 @@ def test_tag_phases():
                 assert np.all(data[select, 2] == tag), 'phase was different'
 
                 diff = np.diff(data[select, 1])
-                assert np.all(np.diff(np.where(diff == (num_phases - 1))) ==\
-                        num_phases), 'waveforms not appropriately periodic'
+                max = np.max(np.abs(diff))
+                assert np.all(np.diff(np.argwhere(diff == max)) == num_waveforms), \
+                    "waveforms not appropriately periodic"
 
                 # FIXME add test for monotonic increase of waveforms
 
@@ -378,3 +379,4 @@ def test_tag_phases():
                 else:
                     assert data[select, 1][0] == \
                             tagged[rep][tag]['waveform shutter closed']
+
