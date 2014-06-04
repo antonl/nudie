@@ -380,3 +380,24 @@ def test_tag_phases():
                     assert data[select, 1][0] == \
                             tagged[rep][tag]['waveform shutter closed']
 
+def test_tag_phases_exact_period():
+    # Fixed bug where an assertion would fail if table_start_detect[0]
+    # indicated that the first camera frame was the first phase in the 
+    # waveform
+
+    period = 4
+    num_phases = 4
+    nframes = 100
+    duty_cycle = 0.5
+    table_start = np.zeros((nframes,), dtype=int)
+    table_start[::period] = np.array([4*i for i in range(nframes//period)])
+
+    shutter_info = {'last open idx': int(nframes*duty_cycle),
+            'first closed idx' : int(nframes*duty_cycle)+5}
+
+    tags = nudie.tag_phases(table_start, period, range(num_phases), \
+            shutter_info=shutter_info)
+
+    # check that the first phase of the only waveform with the shutter open 
+    # starts at index 0
+    assert tags[0][0]['shutter open'].start == 0 

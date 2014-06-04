@@ -299,7 +299,7 @@ def tag_phases(table_start_detect, period, tags, waveform_repeat=1,
     
     period_index = period - 1 - table_start_detect[0]
 
-    assert period_index > 0, \
+    assert period_index >= 0, \
         'had partial table at the beginning that is longer ' +\
         'than total periodicity'
     if not (period % waveform_repeat == 0):
