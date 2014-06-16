@@ -269,7 +269,6 @@ def trim_all(cdata, ais, trim_to=slice(10, -10)):
 def tag_phases(table_start_detect, period, tags, waveform_repeat=1,
         shutter_info=None):
     '''tag camera frames based on the number of waveforms and waveform repeat'''
-    # FIXME: period is actually num_waveforms * waveform_repeat!!
 
     nphases = len(tags)
     if nphases < 1:
@@ -279,6 +278,16 @@ def tag_phases(table_start_detect, period, tags, waveform_repeat=1,
         log.error(s)
         raise ValueError(s)
     
+    if not (period % waveform_repeat == 0):
+        s = 'waveform repeat does not divide period without remainder! ' +\
+                'Are you sure waveform_repeat and period are correct? ' +\
+                'Waveform_repeat: {:d}\tPeriod: {:d}'.format(waveform_repeat,
+                        period)
+        log.error(s)
+        raise ValueError(s)
+
+    nwaveforms = period // (nphases*waveform_repeat)
+
     # FIXME: this isn't quite right. I should probably group the shutter open
     # and shutter closed shots in the same pass. I can then subtract the pump
     # scatter that is specific to each phase.
@@ -297,18 +306,11 @@ def tag_phases(table_start_detect, period, tags, waveform_repeat=1,
         log.debug('using shutter info, it has the right keys. {!s}'\
                 .format(shutter_info))
     
-    period_index = period - 1 - table_start_detect[0]
+    period_index = period - table_start_detect[0]
 
     assert period_index >= 0, \
         'had partial table at the beginning that is longer ' +\
         'than total periodicity'
-    if not (period % waveform_repeat == 0):
-        s = 'waveform repeat does not divide period without remainder! ' +\
-                'Are you sure waveform_repeat and period are correct? ' +\
-                'Waveform_repeat: {:d}\tPeriod: {:d}'.format(waveform_repeat,
-                        period)
-        log.error(s)
-        raise ValueError(s)
 
     if not (period % nphases == 0):
         s = 'number of tags does not divide period without remainder! ' +\
@@ -325,13 +327,13 @@ def tag_phases(table_start_detect, period, tags, waveform_repeat=1,
     # What is the repeat setting?  
     skip_repeats = int((period_index + 1) % waveform_repeat)
     # What is the current phase?
-    skip_phases = int((period_index - skip_repeats + 1) // (waveform_repeat))
+    skip_phases = int((period_index + 1 - skip_repeats // (waveform_repeat)))
     
     if skip_repeats != 0: 
         next(ctags[0]) # roll over phase counter if reps roll over
 
-    # FIXME work in progress
-    min_waveform = period_index  // (waveform_repeat*nphases) 
+    # this is the earliest waveform that the camera frame could be
+    min_waveform = (period_index // nwaveforms) % nwaveforms
 
     tagged = {}
     for rep in it.islice(crep, skip_repeats, waveform_repeat + skip_repeats):
@@ -342,17 +344,19 @@ def tag_phases(table_start_detect, period, tags, waveform_repeat=1,
             offset = repeats + i*waveform_repeat
             open = slice(offset, shutter_info['last open idx'],
                     waveform_repeat*nphases)
-            k = (shutter_info['first closed idx'] - offset) // (waveform_repeat*nphases) 
+            k = (shutter_info['first closed idx'] - offset) // nwaveforms 
             closed = slice(offset + (k+1)*waveform_repeat*nphases, 
                     None, waveform_repeat*nphases)
             first_waveform = min_waveform + (skip_repeats + \
-                    waveform_repeat*skip_phases + offset) // (waveform_repeat*nphases)            
+                    waveform_repeat*skip_phases + offset) // nwaveforms            
             tmp[tag] = {'shutter open': open,
                     'shutter closed': closed,
                     'waveform shutter open': first_waveform,
                     'waveform shutter closed': (first_waveform +\
-                        (k+1))%(waveform_repeat*nphases)}
+                        k % nwaveforms),
+                    }
         tagged.update({rep: tmp})
+    tagged.update({'nwaveforms': nwaveforms, 'min_waveform': min_waveform})
     return tagged
 
 def identify_prd_peak(wl, data, window=None, axes=None):
