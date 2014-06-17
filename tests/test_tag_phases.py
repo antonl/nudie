@@ -74,22 +74,30 @@ def test_general_case():
                     assert data[select, 1][0] == \
                             tagged[rep][tag]['waveform shutter closed']
 
-def test_several_waveforms_one_phase_offset():
-    period = 6 
+@pytest.mark.parametrize("period, offset", [
+    (6, 2), (4, 1), (12, 4), (4, 7),
+    ])
+def test_several_waveforms_one_phase_offset(period, offset):
+    #period = 6 
     num_phases = 1
     nframes = 1000
     duty_cycle = 0.5
-    offset = 0
+    #offset = 1
     table_start = np.array([period*i + offset for i in range(nframes//period)])
-    pdb.set_trace()
 
-    shutter_info = {'last open idx': int(nframes*duty_cycle),
-            'first closed idx' : int(nframes*duty_cycle)+5}
+    shutter_info = {'last open idx': slice(None, int(nframes*duty_cycle)),
+            'first closed idx' : slice(int(nframes*duty_cycle)+5, None)}
 
     tags = nudie.tag_phases(table_start, period, range(num_phases), \
-            shutter_info=shutter_info)
+            nframes, shutter_info=shutter_info)
 
-    assert tags[0][0]['waveform shutter open'] == (period - offset) % period
+    assert len(tags) == 1, 'waveform repeat detected incorrectly'
+    assert len(tags[0]) == period, 'nwaveforms detected incorrectly'
+    assert len(tags[0][0]) == num_phases, 'num_phases detected incorrectly'
+    # first repeat, offset'th waveform, first phase, shutter open, and first
+    # index
+    assert tags[0][offset % period][0]['shutter open'][0] == 0, \
+            'incorrect first waveform'
 
 @pytest.mark.XFAIL
 def test_one_waveform_one_phase():

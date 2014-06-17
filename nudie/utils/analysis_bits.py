@@ -7,11 +7,14 @@ import logging
 log = logging.getLogger('nudie.analysis_bits')
 import itertools as it
 import numpy as np
+from collections import deque
 from pathlib import Path
 from .. import SpeFile
 from scipy.signal import get_window, find_peaks_cwt
 from scipy.fftpack import fft, fftshift, fftfreq
 from .. import wavelen_to_freq
+
+import pdb
 
 def repeatn(iter, n=1):
     '''repeat each item in an iterator n times'''
@@ -266,7 +269,7 @@ def trim_all(cdata, ais, trim_to=slice(10, -10)):
     for ai in ais: tai.append(ai[trim_to])
     return cdata[:, trim_to], tai
 
-def tag_phases(table_start_detect, period, tags, waveform_repeat=1,
+def tag_phases(table_start_detect, period, tags, nframes, waveform_repeat=1,
         shutter_info=None):
     '''tag camera frames based on the number of waveforms and waveform repeat'''
 
@@ -306,11 +309,14 @@ def tag_phases(table_start_detect, period, tags, waveform_repeat=1,
         log.debug('using shutter info, it has the right keys. {!s}'\
                 .format(shutter_info))
     
-    period_index = period - table_start_detect[0]
+    period_index = int(table_start_detect[0] - period) % period
 
     assert period_index >= 0, \
         'had partial table at the beginning that is longer ' +\
         'than total periodicity'
+
+    assert nframes >= 1, \
+        'doesn\'t make sense to have less than one camera frame'
 
     if not (period % nphases == 0):
         s = 'number of tags does not divide period without remainder! ' +\
@@ -320,44 +326,36 @@ def tag_phases(table_start_detect, period, tags, waveform_repeat=1,
         log.error(s)
         raise ValueError(s)
 
-    # Tee is very important, Otherwise we move the cycler forward 
-    # for each rep and lose synchronization
-    ctags = it.tee(it.cycle(tags), waveform_repeat)
-    crep = it.cycle(range(waveform_repeat))
-    # What is the repeat setting?  
-    skip_repeats = int((period_index + 1) % waveform_repeat)
-    # What is the current phase?
-    skip_phases = int((period_index + 1 - skip_repeats // (waveform_repeat)))
-    
-    if skip_repeats != 0: 
-        next(ctags[0]) # roll over phase counter if reps roll over
+    # create an array that contains all loop combinations
+    # this isn't the most efficient way of doing it, but it's conceptually
+    # easy
 
-    # this is the earliest waveform that the camera frame could be
-    min_waveform = (period_index // nwaveforms) % nwaveforms
+    # make iterator using generator expression
+    states = it.cycle([(rep, phase, waveform) \
+            for waveform in range(nwaveforms) \
+            for phase in tags \
+            for rep in range(waveform_repeat)])
 
-    tagged = {}
-    for rep in it.islice(crep, skip_repeats, waveform_repeat + skip_repeats):
-        tmp = {}
+    # skip incomplete phases
+    states = it.islice(states, period_index, None)
 
-        for i, tag in enumerate(it.islice(ctags[rep], skip_phases, nphases+skip_phases)):
-            repeats = (skip_repeats - rep) % waveform_repeat
-            offset = repeats + i*waveform_repeat
-            open = slice(offset, shutter_info['last open idx'],
-                    waveform_repeat*nphases)
-            k = (shutter_info['first closed idx'] - offset) // nwaveforms 
-            closed = slice(offset + (k+1)*waveform_repeat*nphases, 
-                    None, waveform_repeat*nphases)
-            first_waveform = min_waveform + (skip_repeats + \
-                    waveform_repeat*skip_phases + offset) // nwaveforms            
-            tmp[tag] = {'shutter open': open,
-                    'shutter closed': closed,
-                    'waveform shutter open': first_waveform,
-                    'waveform shutter closed': (first_waveform +\
-                        k % nwaveforms),
-                    }
-        tagged.update({rep: tmp})
-    tagged.update({'nwaveforms': nwaveforms, 'min_waveform': min_waveform})
-    return tagged
+    # initialize structure for holding integer indexes
+    # FIXME: make less ugly
+    waveform_store = [[
+        {phase: {k : deque() for k in ['shutter open', 'shutter closed']} \
+                for phase in tags}\
+        for i in range(nwaveforms)] for rep in range(waveform_repeat)]
+
+    # TODO: perhaps put shutter open/closed after rep?
+
+    # create indexing sequences
+    for i, (rep, phase, waveform) in zip(range(nframes), states):
+        if i < shutter_info['last open idx'].stop:
+            waveform_store[rep][waveform][phase]['shutter open'].append(i)
+        elif i >= shutter_info['first closed idx'].start:
+            waveform_store[rep][waveform][phase]['shutter closed'].append(i)
+
+    return waveform_store
 
 def identify_prd_peak(wl, data, window=None, axes=None):
     assert len(data.shape) == 1, 'expected spectrum averaged over ' +\
