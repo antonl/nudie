@@ -71,17 +71,17 @@ def test_exact_period():
     # starts at index 0
     assert tags[0][0][0]['shutter open'][0] == 0 
 
-@pytest.mark.parametrize("offset, repeat", [
-    (0, 1), (1, 1), (2, 1), (3, 1), (4, 1),
-    (5, 1), (6, 1), (7,1)])
-def test_general_case(offset, repeat):
+@pytest.mark.parametrize("offset, repeat, nwave", [
+    (0, 1, 6), (1, 1, 6), (2, 1, 6), (3, 1, 5), (4, 1, 6),
+    (5, 1, 4), (6, 1, 4), (7,1, 5)])
+def test_general_case(offset, repeat, nwave):
     ''' tests whether many waveforms, several phase case works'''
     duty_cycle = 0.5
     transition_width = 3
     nframes = 100 
     waveform_repeat = repeat
-    nwaveforms = 3 
-    tags = ['one']
+    nwaveforms = nwave 
+    tags = ['one', 'two', 'three']
     nphases = len(tags) 
 
     data = np.zeros((nframes, 4), dtype=object)
