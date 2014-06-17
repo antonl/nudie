@@ -309,9 +309,9 @@ def tag_phases(table_start_detect, period, tags, nframes, waveform_repeat=1,
         log.debug('using shutter info, it has the right keys. {!s}'\
                 .format(shutter_info))
     
-    period_index = int(table_start_detect[0] - period) % period
+    offset = int(-table_start_detect[0]) % period
 
-    assert period_index >= 0, \
+    assert table_start_detect[0] <= period, \
         'had partial table at the beginning that is longer ' +\
         'than total periodicity'
 
@@ -337,7 +337,7 @@ def tag_phases(table_start_detect, period, tags, nframes, waveform_repeat=1,
             for rep in range(waveform_repeat)])
 
     # skip incomplete phases
-    states = it.islice(states, period_index, None)
+    states = it.islice(states, offset, None)
 
     # initialize structure for holding integer indexes
     # FIXME: make less ugly
