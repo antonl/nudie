@@ -74,6 +74,7 @@ def load_job(job_name, when='today', batch_set=set([0]), data_path=data_folder):
         batch_info['batch_name'] = s
         batch_info['when'] = when
         batch_info['job_name'] = job_name
+        batch_info['batch_path'] = str(batch_path)
         
         yield batch_info
 
