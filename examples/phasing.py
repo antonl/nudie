@@ -132,7 +132,11 @@ with h5py.File(str(file_path)) as f:
     # visit written out file to find everything called 'pump_probe',
     # write that into pp_avg
     bg.visititems(averager(pp_avg, 'pump_probe'))
-    del bg['mean_pump_probe']
+    try:
+        del bg['mean_pump_probe']
+    except:
+        pass
+
     bg['mean_pump_probe'] = pp_avg
     
     ## Done with pump probe processing
