@@ -9,13 +9,16 @@ from datetime import date
 import h5py
 from matplotlib import pyplot
 
-pp_name = 'r800-pp'
-pp_batch = 1
+pp_name = 'd1d2-pp'
+pp_batch = 4
 
-spec_name = 'd1d2-2d'
-spec_batch = 0 
+dd_name = 'd1d2-2d'
+dd_batch = 0 
 
-when = '14-06-20'
+# phase cycling scheme in radians
+phase_scheme = [(0, 0), (1, 1), (0, 0.6), (1, 1.6), (0, 1.3), (1, 2.3)]
+
+when = '14-06-23'
 
 # turn on printing of errors
 nudie.show_errors(nudie.logging.INFO)
@@ -52,7 +55,7 @@ def plot_pp(ax, x=None):
     return wrapped
 
 # open hdf5 file to write to
-file_path = analysis_folder / '{!s}-batch{:02d}.hdf5'.format(spec_name, spec_batch)
+file_path = analysis_folder / '{!s}-batch{:02d}.hdf5'.format(dd_name, dd_batch)
 with h5py.File(str(file_path)) as f:
     # load up pp data to use
     pp_info = next(nudie.load_job(job_name=pp_name, batch_set=[pp_batch], 
@@ -142,6 +145,95 @@ with h5py.File(str(file_path)) as f:
     ## Done with pump probe processing
     print("Finished pump probe processing")
 
+    # Now do the same with the 2D stuff
+
+    '''
+    dd_info = next(nudie.load_job(job_name=dd_name, batch_set=[pp_batch], 
+        when=when))
+
+    bg = f.require_group('2D')
+
+    # store some stuff for later in attributes
+    bg.attrs['batch_name'] = dd_info['batch_name']
+    bg.attrs['path'] = dd_info['batch_path']
+
+    # load up all available data files
+    for t2, table, loop in it.product(
+            dd_info['t2_range'], 
+            dd_info['table_range'], 
+            dd_info['loop_range']):
+
+        g = bg.require_group('{:02d}/{:02d}/{:02d}'.format(t2, table,loop))
+
+        # first file requires special synchronization
+        # this is the rule that determines that it is the first file
+        first = 'first' if all([t2 == 0, table == 0, loop == 0]) else False
+        
+        # path to data
+        current_path = nudie.data_folder / dd_info['when'] / dd_info['batch_name']
+
+        # Load everything for the given t2, table, and loop value
+        analogs = nudie.load_analogtxt(dd_info['job_name'], 
+                current_path, t2, table, loop)
+        cdata = nudie.load_camera_file(dd_info['job_name'], 
+                current_path, t2, table, loop, force_uint16=True)
+
+        # Synchronize it, trimming some frames in the beginning and end
+        data, (a1, a2) = nudie.trim_all(*nudie.synchronize_daq_to_camera(cdata, 
+            analog_channels=analogs, which_file=first))        
+        start_idxs, period = nudie.detect_table_start(a1)
+
+        # determine where the shutter is
+        shutter_open, shutter_closed, duty_cycle = \
+                nudie.determine_shutter_shots(data)
+
+        # tag the phases
+        shutter_info = {'last open idx': shutter_open, 
+                'first closed idx': shutter_closed}
+        
+        phase_cycles = range(6)
+        tags = nudie.tag_phases(start_idxs, period, tags=phase_cycles, 
+                nframes=data.shape[1], shutter_info=shutter_info)
+        
+        # subtract the probe scatter by averaging the shutter closed data 
+        # and subtracting it from each waveform of the shutter open data
+        mdata = {}
+        for k,w in it.product(phase_cycles, range(dd_info['nt1'])):
+            mdata[k] = data[:, tags[0][w][k]['shutter open']].mean(axis=-1) \
+                    - data[:, tags[0][w][k]['shutter closed']].mean(axis=-1)
+        
+        # store each individual phase in the data file
+        for k,v in mdata.items():
+            try:
+                del g[k]
+            except:
+                pass
+            g[k] = v
+
+        try:
+            del g['pump_probe']
+        except:
+            pass
+
+        # store data as pump probe
+        g['pump_probe'] = ((mdata['zero'] - mdata['none1']) \
+                + (mdata['pipi'] - mdata['none2']))   
+    
+    # average together the individual pump probe spectra
+    npixels = data.shape[0]
+    pp_avg = np.zeros((npixels,))
+    
+    # visit written out file to find everything called 'pump_probe',
+    # write that into pp_avg
+    bg.visititems(averager(pp_avg, 'pump_probe'))
+    try:
+        del bg['mean_pump_probe']
+    except:
+        pass
+
+    bg['mean_pump_probe'] = pp_avg
+    '''
+    
     wl = nudie.simple_wavelength_axis()[::-1]
     bg.visititems(plot_pp(pyplot.axes(),x=wl)) 
     pyplot.plot(wl, pp_avg, linewidth=1.5, color='k')

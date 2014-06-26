@@ -10,8 +10,8 @@ import numpy as np
 from collections import deque
 from pathlib import Path
 from .. import SpeFile
-from scipy.signal import get_window, find_peaks_cwt
-from scipy.fftpack import fft, fftshift, fftfreq
+from scipy.signal import get_window, argrelmax
+from scipy.fftpack import fft, fftshift, fftfreq, ifft, hilbert
 from .. import wavelen_to_freq
 
 import pdb
@@ -210,30 +210,30 @@ def detect_table_start(array, waveform_repeat=1):
     # should be short cut evaluation, so second statement assumes same length
     # arrays
     if len(lohi) != len(hilo) or not np.all(lohi < hilo):
-        log.warning('spike showed up as the first or last signal')
+        log.debug('spike showed up as the first or last signal')
         # check which one is longer, and which comes first 
         mlen = min(len(lohi), len(hilo))
-        log.warning('minimal length is {:d}'.format(mlen))
+        log.debug('minimal length is {:d}'.format(mlen))
         if len(lohi) > mlen:
             # order is correct, but hilo is missing a point
             # truncate lohi at the end
-            log.warning('truncated lohi to match hilo')
+            log.debug('truncated lohi to match hilo')
             lohi = lohi[:-1]
             assert len(lohi) == len(hilo), 'did not help'
         elif len(hilo) > mlen:
             # order is incorrect, must be missing first point
-            log.warning('truncated hilo to match lohi')
+            log.debug('truncated hilo to match lohi')
             hilo = hilo[1:]
             assert len(lohi) == len(hilo), 'did not help'
         elif not np.all(lohi[:mlen] < hilo[:mlen]):
-            log.warning('both sides missing, shift over one')
+            log.debug('both sides missing, shift over one')
             lohi, hilo = lohi[:-1], hilo[1:]
             assert len(lohi) == len(hilo), 'did not help'
         else:
             assert False, "should not happen!"
 
         mlen = max(len(lohi), len(hilo))
-        log.warning('truncating to {:d}'.format(mlen))
+        log.debug('truncating to {:d}'.format(mlen))
         lohi, hilo = lohi[:mlen], hilo[:mlen]
 
     if lohi.shape[0] == 1:
@@ -357,33 +357,48 @@ def tag_phases(table_start_detect, period, tags, nframes, waveform_repeat=1,
 
     return waveform_store
 
-def identify_prd_peak(wl, data, window=None, axes=None):
+def identify_prd_peak(wl, data, all_info=False, window=None, axes=None):
     assert len(data.shape) == 1, 'expected spectrum averaged over ' +\
             'camera frames'
-    peak_widths = np.arange(5, 200, 5)
+    peak_widths = np.arange(5, 200, 10)
     threshold = 0.001 # fraction of DC peak 
+    window_width = 200 # in pixels
+    pad_factor = 2 
+    adjacent_pts_fit = 2 # fit on either side
+    min_prd = 500 # fs
 
     if window:
         # for future
         raise NotImplementedError('don\'t know how to use a custom window')
-    
-    window = get_window(('kaiser', 11), len(prd), fftbins=False)
+    else:
+        window = get_window(('kaiser', 11), window_width, fftbins=False)
 
-    freq, prd, df = wavelen_to_freq(wl, data, ret_df=True)
-    time = fftshift(fftfreq(len(freq), df))
-    ft = fftshift(abs(fft(prd*window)))
+    assert window.shape[0] < data.shape[0], 'window must be smaller than data'
+    assert len(data.shape) == 1, 'data should be 1d'
 
-    res = np.array(find_peaks_cwt(ft, peak_widths, min_length=3))
-    select = ft[res] > threshold*np.max(ft)
-    prd_idx = res[select][-1]
+    freq, data, df = wavelen_to_freq(wl, data, ret_df=True)
+
+    padded = np.zeros((data.shape[0]*pad_factor,))
+    padded[:data.shape[0]] = data*get_window(('kaiser', 20), data.shape[0])
+    time = fftshift(fftfreq(padded.shape[0], df))
+    ft = fftshift(abs(fft(padded)))
+
+    res = argrelmax(ft, order=20*pad_factor)[0]
+    prd_idx = res[np.logical_and(time[res] > min_prd, ft[res] >
+        threshold*np.max(ft))][0]
+
+    # fit parabola to adjacent points to find intrabin time
+    sel = slice(prd_idx-adjacent_pts_fit, prd_idx+adjacent_pts_fit)
+    p = np.polyfit(time[sel], ft[sel], 2)
+    prd_guess = -0.5*p[1]/p[0] # from vertex form
 
     if axes:
         # going to plot stuff to axes
-        axes.plot(time, ft)
-        next_highest = ft[res[select][-1]]
-        axes.set_ylim(0, 1.1*next_highest)
+        axes.plot(time, abs(ft), marker='+', markersize=5)
+        next_highest = ft[prd_idx]
+        #axes.set_ylim(0, 1.1*next_highest)
         #axes.set_xlim(time[prd_idx]-, time[prd_idx])
-        axes.vlines(time[res], 0, next_highest, color='r')
+        axes.vlines(prd_guess, 0, next_highest, color='r')
 
     log.info('found PRD at {:.1f} fs'.format(time[prd_idx]))
 

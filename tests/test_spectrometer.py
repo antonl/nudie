@@ -2,6 +2,9 @@ import pytest
 import numpy as np
 
 import nudie
+from matplotlib import pyplot
+from scipy.signal import get_window
+
 speed_of_light = 299.792458 # nm/fs
 
 def test_wavelen_to_freq_lowside():
@@ -61,3 +64,14 @@ def test_simple_wavelen():
     res = nudie.spectrometer.simple_wavelength_axis()
     assert res.shape[0] == 1340 # correct default number of pixels
     
+#@pytest.mark.parametrize('tau', [(500,), (600,), (700,), (850,),
+#    (900,), (1200,)])
+@pytest.mark.parametrize('tau', [(500,)])
+def test_identify_prd_peak_sine(tau):
+    lamb = np.linspace(650, 700, 1340)
+    w = 2*np.pi*nudie.spectrometer.speed_of_light/lamb
+    signal = np.sin(w*tau)*get_window(('kaiser', 6), 1340)
+    
+    nudie.identify_prd_peak(lamb, signal, axes=pyplot.axes())
+    pyplot.show()
+

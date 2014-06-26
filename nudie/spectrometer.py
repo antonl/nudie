@@ -5,6 +5,8 @@ log = logging.getLogger('nudie.spectrometer')
 import numpy as np
 from scipy.interpolate import interp1d
 
+speed_of_light = 299.792458 # nm/fs
+
 def simple_wavelength_axis(groove_density=600, center_wavelength=650, 
         num_pixels=1340):
     '''uses Horiba's listing of typical spectral bandwidth to convert a groove
@@ -38,8 +40,6 @@ def wavelen_to_freq(axis, data, ret_df=False):
 
     log.debug('converting wavelength to frequency')
     
-    speed_of_light = 299.792458 # nm/fs
-
     assert len(axis.shape) == 1, 'wavelength axis should be 1D'
     assert len(data.shape) == 1, 'data assumed to be 1D'
 
