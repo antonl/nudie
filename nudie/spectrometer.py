@@ -7,6 +7,11 @@ from scipy.interpolate import interp1d
 
 speed_of_light = 299.792458 # nm/fs
 
+hg_ar_lines = np.array( [253.652, 296.728, 302.150, 312.567, 313.155, 334.148, 
+    365.015, 404.656, 407.783, 435.833, 546.074, 576.960, 579.066, 696.543, 
+    706.722, 710.748, 727.294, 738.393, 750.387, 763.511, 772.376, 794.818, 
+    800.616, 811.531, 826.452, 842.465, 852.144, 866.794, 912.297, 922.450])
+
 def simple_wavelength_axis(groove_density=600, center_wavelength=650, 
         num_pixels=1340):
     '''uses Horiba's listing of typical spectral bandwidth to convert a groove
@@ -44,13 +49,14 @@ def wavelen_to_freq(axis, data, ret_df=False):
     assert len(data.shape) == 1, 'data assumed to be 1D'
 
     if axis[-1] > axis[0]: # make wavelength go from red to blue
+        log.debug('flipping axis and data')
         axis = axis[::-1] 
         data = data[::-1] 
     
     dat_freq = speed_of_light/axis
     
     # former bug: data needs to be inverted when in frequency space
-    interpolator = interp1d(dat_freq, data[::-1], kind='cubic')
+    interpolator = interp1d(dat_freq, data, kind='cubic')
 
     freq, df = np.linspace(dat_freq[0], dat_freq[-1], data.shape[0], retstep=True)
 

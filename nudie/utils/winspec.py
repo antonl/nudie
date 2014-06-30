@@ -152,9 +152,9 @@ class SpeFile(object):
             self._data = np.rollaxis(self._data, 0, 3)
 
             # flip data
-            if all([self.reversed == True, self.adc == '100 khz']):
+            if all([self.reversed == True, self.adc == '100 KHz']):
                 pass
-            elif any([self.reversed == True, self.adc == '100 khz']):
+            elif any([self.reversed == True, self.adc == '100 KHz']):
                 self._data = self._data[::-1, ...]
                 log.debug('flipped data because of nonstandard ADC setting ' +\
                         'or reversed setting')

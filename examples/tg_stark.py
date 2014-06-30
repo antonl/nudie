@@ -8,13 +8,14 @@ import itertools as it
 from datetime import date
 import h5py
 from matplotlib import pyplot
+from scipy.signal import argrelmax
 
 tg_name = 'd1d2-tg'
-tg_batch = 0
-when = '14-06-25'
+tg_batch = 1
+when = '14-06-28'
 
 # turn on printing of errors
-nudie.show_errors(nudie.logging.INFO)
+nudie.show_errors(nudie.logging.DEBUG)
 
 # create path to write our analysis to, if it doesn't exist already
 analysis_folder = nudie.mount_point / '2D' / 'Analysis' / str(date.today())
@@ -47,9 +48,53 @@ def plot_pp(ax, x=None):
         
     return wrapped
 
+# do spectrometer calibration
+calib_spec_file = nudie.SpeFile(nudie.data_folder / '14-06-28' \
+        / 'Calib_Spec_650nm_600g.SPE')
+
+data = np.squeeze(calib_spec_file.data).mean(axis=-1)
+
+fig, (ax1, ax2) = pyplot.subplots(2, 1)
+
+# baseline subtraction
+px = np.arange(data.shape[0])
+pv = np.polyfit(px, data, 2)
+data -= np.polyval(pv, px)
+
+# peak fitting
+res = argrelmax(data, order=10)[0]
+select = data[res] > 0.01*np.max(data)
+
+peaks = np.array([706.722, 696.543, 668.2968, 626.3688, 625.1348, 604.3008, 593.4566])
+
+color = it.cycle(['g','c'])
+lines_list = [(i*nudie.spectrometer.hg_ar_lines, next(color)) for i in range(1, 3)]
+
+corr = np.polyfit(res[select], peaks, 2)
+wl = np.polyval(corr, px)
+
+for lines, c in lines_list:
+    ax1.vlines(lines, -0.3*np.max(data), 0, c, linewidth=2)
+ax1.plot(wl, data)
+ax1.vlines(np.polyval(corr, res[select]), 0, 0.3*np.max(data), 'r')
+ax1.set_ylabel('Intensity / AU')
+ax1.set_xlabel('Wavelength / nm')
+ax1.set_xlim(min(wl), max(wl))
+ax1.text(660, 5000, r'$y = {:.3g} \cdot x^2 + {:.3g} \cdot x + {:.3g}$'.format(*corr), fontsize=16)
+ax2.plot(px, np.polyval(corr, px))
+ax2.set_ylabel('Wavelength / nm')
+ax2.set_xlabel('Pixel');
+pyplot.show()
+
 # open hdf5 file to write to
 file_path = analysis_folder / '{!s}-batch{:02d}.hdf5'.format(tg_name, tg_batch)
 with h5py.File(str(file_path), 'w') as f:
+    # save spectrometer calibration
+    spec = f.require_group('spectrometer calibration')
+    spec['spectrum'] = data
+    spec['pixel map'] = corr
+    spec['axis'] = wl
+
     # load up pp data to use
     tg_info = next(nudie.load_job(job_name=tg_name, batch_set=[tg_batch], 
         when=when))
@@ -64,7 +109,7 @@ with h5py.File(str(file_path), 'w') as f:
     current_path = nudie.data_folder / tg_info['when'] / tg_info['batch_name']
 
     # load up all available data files
-    for t2 in it.islice(tg_info['t2_range'], 18, 19):
+    for t2 in it.islice(tg_info['t2_range'], 0, 49):
         t2_g = bg.create_group('{:02d}'.format(t2))
         t2_g.attrs['t2'] = t2
 
@@ -140,38 +185,20 @@ with h5py.File(str(file_path), 'w') as f:
 
     # this is how many pixels we have    
     npixels = data.shape[0]
+    wl = f['spectrometer calibration/axis'][:]
 
     # Average tables and loops together, in case there were more than one
     for t2_g in bg.values(): 
         avg = np.zeros((data.shape[0],))
         t2_g.visititems(averager(avg, 'time_tg'))
         t2_g['mean_time_tg'] = avg
-        pyplot.plot(avg)
+        pyplot.plot(wl, avg)
     
     pyplot.show()
     # perform spectral interferometry
-    wl = nudie.simple_wavelength_axis()[::-1]
     for t2_g in bg.values(): 
         tg = t2_g['mean_time_tg'][:]
         stuff = nudie.identify_prd_peak(wl, tg, all_info=True,
                 axes=pyplot.axes())
-        pyplot.show()
+    pyplot.show()
 
-    '''
-    # average together the individual pump probe spectra
-    npixels = data.shape[0]
-    pp_avg = np.zeros((npixels,))
-    
-    # visit written out file to find everything called 'pump_probe',
-    # write that into pp_avg
-    bg.visititems(averager(pp_avg, 'pump_probe'))
-    try:
-        del bg['mean_pump_probe']
-    except:
-        pass
-
-    bg['mean_pump_probe'] = pp_avg
-    
-    ## Done with pump probe processing
-    print("Finished pump probe processing")
-    '''
