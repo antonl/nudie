@@ -98,12 +98,32 @@ class SpeFile(object):
 
             f.readinto(self.header)
 
+        # set some useful properties
+        self.reversed = True if self.header.geometric == 2 else False
+        self.gain = self.header.gain
+
+        if self.header.ADCtype == 8:
+            self.adc = 'Low Noise'
+        elif self.header.ADCtype == 9:
+            self.adc = 'High Capacity'
+        else:
+            self.adc = 'Unknown'
+
+        if self.header.ADCrate == 12:
+            self.adc_rate = '2 MHz'
+        elif self.header.ADCrate == 6:
+            self.adc_rate = '100 KHz'
+        else:
+            self.adc_rate = 'Unknown'
+
+        self.readout_time = self.header.ReadoutTime
+
     def _read(self):
         ''' Read the data segment of the file and create an appropriately-shaped 
         numpy array
 
         Based on the header, the right datatype is selected and returned as a 
-        numpy array. The indexing convention is [ROI index, Pixel index, Frame
+        numpy array. The indexing convention is [Pixel index, ROI index, Frame
         index]
         '''
 
@@ -119,7 +139,8 @@ class SpeFile(object):
 
             _count = self.header.xdim * self.header.ydim * self.header.NumFrames
             
-            self._data = np.fromfile(f, dtype=SpeFile._datatype_map[self.header.datatype], count=_count)
+            self._data = np.fromfile(f, dtype= \
+                    SpeFile._datatype_map[self.header.datatype], count=_count)
 
             # Also, apparently the ordering of the data corresponds to how it is stored by the shift register
             # Thus, it appears a little backwards...
@@ -129,6 +150,14 @@ class SpeFile(object):
             # memory. It should be beneficial to have NumFrames be last, if all
             # we usually do is average over them anyway.
             self._data = np.rollaxis(self._data, 0, 3)
+
+            # flip data
+            if all([self.reversed == True, self.adc == '100 khz']):
+                pass
+            elif any([self.reversed == True, self.adc == '100 khz']):
+                self._data = self._data[::-1, ...]
+                log.debug('flipped data because of nonstandard ADC setting ' +\
+                        'or reversed setting')
 
             return self._data
 
