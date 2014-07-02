@@ -64,3 +64,28 @@ def wavelen_to_freq(axis, data, ret_df=False):
         return freq, interpolator(freq), df
     else:
         return freq, interpolator(freq)
+
+def freq_to_wavelen(axis, data, ret_dwl=False):
+    '''convert wavelength in nm to frequency in Hz'''
+
+    log.debug('converting frequency to wavelength')
+    
+    assert len(axis.shape) == 1, 'wavelength axis should be 1D'
+    assert len(data.shape) == 1, 'data assumed to be 1D'
+
+    if axis[-1] > axis[0]: # make frequency go from blue to red
+        log.debug('flipping axis and data')
+        axis = axis[::-1] 
+        data = data[::-1] 
+    
+    dat_wl = speed_of_light/axis
+    
+    # former bug: data needs to be inverted when in frequency space
+    interpolator = interp1d(dat_wl, data, kind='cubic')
+
+    wl, dwl = np.linspace(dat_wl[0], dat_wl[-1], data.shape[0], retstep=True)
+
+    if ret_dwl:
+        return wl, interpolator(wl), dwl 
+    else:
+        return wl, interpolator(wl)

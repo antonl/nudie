@@ -7,18 +7,21 @@ import numpy as np
 import itertools as it
 from datetime import date
 import h5py
+import pdb
 from matplotlib import pyplot
 from scipy.signal import argrelmax
+from pathlib import Path
 
 tg_name = 'd1d2-tg'
 tg_batch = 1
 when = '14-06-28'
 
 # turn on printing of errors
-nudie.show_errors(nudie.logging.DEBUG)
+nudie.show_errors(nudie.logging.INFO)
 
 # create path to write our analysis to, if it doesn't exist already
-analysis_folder = nudie.mount_point / '2D' / 'Analysis' / str(date.today())
+analysis_folder = Path('.')
+#analysis_folder = nudie.mount_point / '2D' / 'Analysis' / str(date.today())
 
 try:
     analysis_folder.mkdir(parents=True)
@@ -47,6 +50,39 @@ def plot_pp(ax, x=None):
             ax.plot(wl, obj)
         
     return wrapped
+
+def LO_selector(prd_found, wl):
+    import re
+    matcher = re.compile(r'^[\w/]*(stark|no stark)')
+
+    def wrapped(name, obj):
+        nonlocal prd_found, wl, matcher
+        if (type(obj) == h5py.Group) and matcher.match(name):
+            print('starting ' + str(obj.name))
+            # got a group containing phases
+            num_shots = []
+            for phase in obj.values():
+                num_shots.append(phase.shape[1])
+            length = min(num_shots)
+            
+            tmp = {}
+            for phase in ['zero', 'none1', 'pipi', 'none2']:
+                print('\tstarting ' + str(phase))
+                # run spectral interferometery
+                tmp[phase] = np.zeros((1340, length), dtype=complex)
+                for i in range(length):
+                    print(i)
+                    _, _, E_sig, E_lo = nudie.select_prd_peak(wl,
+                            obj[phase][:,i], known_prd=prd_found) 
+                    tmp[phase][:, i] = E_sig/E_lo
+            res = (tmp['zero'] - tmp['none1']) \
+                    + (tmp['pipi'] - tmp['none2'])
+            obj['mean_tg'] = res.mean(axis=-1)
+    return wrapped
+
+def find_mean_tg(name):
+    if 'mean_tg' in name:
+        return name
 
 # do spectrometer calibration
 calib_spec_file = nudie.SpeFile(nudie.data_folder / '14-06-28' \
@@ -109,9 +145,9 @@ with h5py.File(str(file_path), 'w') as f:
     current_path = nudie.data_folder / tg_info['when'] / tg_info['batch_name']
 
     # load up all available data files
-    for t2 in it.islice(tg_info['t2_range'], 0, 49):
+    for t2 in it.islice(tg_info['t2_range'], 75, 76):
         t2_g = bg.create_group('{:02d}'.format(t2))
-        t2_g.attrs['t2'] = t2
+        t2_g.attrs['t2'] = tg_info['t2'][t2]
 
         for table in tg_info['table_range']:
             table_g = t2_g.create_group('{:02d}'.format(table))
@@ -133,7 +169,7 @@ with h5py.File(str(file_path), 'w') as f:
 
                 # Synchronize it, trimming some frames in the beginning and end
                 data, (a1, a2) = nudie.trim_all(*nudie.synchronize_daq_to_camera(cdata, 
-                    analog_channels=analogs, which_file=first))        
+                    analog_channels=analogs, which_file=first))
                 start_idxs, period = nudie.detect_table_start(a1)
 
                 # determine where the shutter is
@@ -157,48 +193,57 @@ with h5py.File(str(file_path), 'w') as f:
                 mdata_nostark = {}
                 s_g, n_g = loop_g.create_group('stark'), \
                         loop_g.create_group('no stark') 
-                for k in phase_cycles:
 
+                for k in phase_cycles:
                     fo = np.intersect1d(tags[0][0][k]['shutter open'], stark_idx,
                             assume_unique=True)
                     fc = np.intersect1d(tags[0][0][k]['shutter closed'], \
                             stark_idx, assume_unique=True)
-                    mdata_stark[k] = data[:, fo].mean(axis=-1) \
-                        - data[:, fc].mean(axis=-1)
+                    mdata_stark[k] = data[:, fo] \
+                            - data[:, fc].mean(axis=-1)[:, np.newaxis]
 
                     no = np.intersect1d(tags[0][0][k]['shutter open'], \
                             nostark_idx, assume_unique=True)
                     nc = np.intersect1d(tags[0][0][k]['shutter closed'], \
                             nostark_idx, assume_unique=True)
-                    mdata_nostark[k] = data[:, no].mean(axis=-1) \
-                        - data[:, nc].mean(axis=-1)
+                    mdata_nostark[k] = data[:, no] \
+                            - data[:, nc].mean(axis=-1)[:, np.newaxis]
                 
                 for k, v in mdata_stark.items():
                     s_g[k] = v
                 for k, v in mdata_nostark.items():
                     n_g[k] = v
 
-                # store data as tg
-                for s in loop_g.values():
-                    s['time_tg'] = ((s['zero'][:] - s['none1'][:]) \
-                            + (s['pipi'][:] - s['none2'][:]))   
-
     # this is how many pixels we have    
     npixels = data.shape[0]
     wl = f['spectrometer calibration/axis'][:]
 
-    # Average tables and loops together, in case there were more than one
-    for t2_g in bg.values(): 
-        avg = np.zeros((data.shape[0],))
-        t2_g.visititems(averager(avg, 'time_tg'))
-        t2_g['mean_time_tg'] = avg
-        pyplot.plot(wl, avg)
+    if bg.get('probe_ref_delay') is None:
+        # pick a T2 after time zero to determine the PRD
+        t2 = tg_info['nt2']//2 
+        prd_estimate_spectrum = bg['{:02d}/00/00/no stark/pipi'.format(t2)]\
+                [:].mean(axis=-1)
+        prd_guess, freq, E_sig, E_lo = nudie.select_prd_peak(wl, 
+                prd_estimate_spectrum, axes=pyplot.axes())
+        pyplot.show()
+
+    #bg.visititems(LO_selector(prd_guess, wl))
     
+    '''
+    tg_scan = bg['spectrum'] = np.zeros((1340, tg_info['nt2']), dtype=complex)
+    for i, t2_item in enumerate(bg.values()):
+        if type(t2_item) == h5py.Group:
+            t2 = t2_item.attrs['t2']
+            tg = t2_item.visit(find_mean_tg)
+            tg_scan[:, i] = t2_item[tg][:]
+
+    pyplot.plot(freq, np.abs(tg_scan))
     pyplot.show()
-    # perform spectral interferometry
-    for t2_g in bg.values(): 
-        tg = t2_g['mean_time_tg'][:]
-        stuff = nudie.identify_prd_peak(wl, tg, all_info=True,
-                axes=pyplot.axes())
-    pyplot.show()
+    '''
+    #wl, E_sig = nudie.freq_to_wavelen(freq, E_sig)
+    #_, E_lo = nudie.freq_to_wavelen(freq, E_lo)
+
+    #pyplot.plot(wl, np.real(E_sig)/np.real(E_lo))
+    #pyplot.plot(wl, np.real(E_lo))
+    #pyplot.show()
 

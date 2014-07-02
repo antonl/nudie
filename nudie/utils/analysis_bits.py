@@ -357,21 +357,21 @@ def tag_phases(table_start_detect, period, tags, nframes, waveform_repeat=1,
 
     return waveform_store
 
-def identify_prd_peak(wl, data, all_info=False, window=None, axes=None):
+def select_prd_peak(wl, data, window=None, axes=None, known_prd=None):
     assert len(data.shape) == 1, 'expected spectrum averaged over ' +\
             'camera frames'
-    peak_widths = np.arange(5, 200, 10)
     threshold = 0.001 # fraction of DC peak 
-    window_width = 200 # in pixels
-    pad_factor = 2 
+    window_width = 150 # in pixels
+    pad_factor = 1 
     adjacent_pts_fit = 2 # fit on either side
-    min_prd = 500 # fs
+    min_prd = 650 # fs
+    dc_left_time, dc_right_time = -200., 200. # in fs
 
     if window:
-        # for future
-        raise NotImplementedError('don\'t know how to use a custom window')
+        window_width = window.shape[0]
+        raise NotImplementedError('untested implementation for reusing window')
     else:
-        window = get_window(('kaiser', 11), window_width, fftbins=False)
+        window = get_window(('kaiser', 7), window_width, fftbins=False)
 
     assert window.shape[0] < data.shape[0], 'window must be smaller than data'
     assert len(data.shape) == 1, 'data should be 1d'
@@ -381,28 +381,62 @@ def identify_prd_peak(wl, data, all_info=False, window=None, axes=None):
     padded = np.zeros((data.shape[0]*pad_factor,))
     padded[:data.shape[0]] = data*get_window(('kaiser', 20), data.shape[0])
     time = fftshift(fftfreq(padded.shape[0], df))
-    ft = fftshift(abs(fft(padded)))
+    ft = fftshift(ifft(padded))
+    ft_abs = np.abs(ft)
 
-    res = argrelmax(ft, order=20*pad_factor)[0]
-    prd_idx = res[np.logical_and(time[res] > min_prd, ft[res] >
-        threshold*np.max(ft))][0]
+    if known_prd is None:
+        res = argrelmax(ft_abs, order=20*pad_factor)[0]
+        prd_idx = res[np.logical_and(time[res] > min_prd, ft_abs[res] >
+            threshold*np.max(ft_abs))][0]
 
-    # fit parabola to adjacent points to find intrabin time
-    sel = slice(prd_idx-adjacent_pts_fit, prd_idx+adjacent_pts_fit)
-    p = np.polyfit(time[sel], ft[sel], 2)
-    prd_guess = -0.5*p[1]/p[0] # from vertex form
+        # fit parabola to adjacent points to find intrabin time
+        sel = slice(prd_idx-adjacent_pts_fit, prd_idx+adjacent_pts_fit)
+        p = np.polyfit(time[sel], ft_abs[sel], 2)
+        prd_guess = -0.5*p[1]/p[0] # from vertex form
+        log.debug('found PRD at {:.1f} fs'.format(prd_guess))
+    else:
+        prd_guess = known_prd
+        prd_idx = np.abs(time-prd_guess).argmin()
+        log.debug('reusing PRD at {:.1f} fs, idx {:d}'.format(time[prd_idx],
+            prd_idx))
 
     if axes:
         # going to plot stuff to axes
-        axes.plot(time, abs(ft), marker='+', markersize=5)
-        next_highest = ft[prd_idx]
-        #axes.set_ylim(0, 1.1*next_highest)
-        #axes.set_xlim(time[prd_idx]-, time[prd_idx])
+        axes.plot(time, ft_abs, marker='+', markersize=5)
+        next_highest = ft_abs[prd_idx]
+        axes.text(prd_guess, next_highest, r'${:5.2f}$'.format(prd_guess))
+        axes.set_ylim(0, 1.1*next_highest)
         axes.vlines(prd_guess, 0, next_highest, color='r')
 
-    log.info('found PRD at {:.1f} fs'.format(time[prd_idx]))
+    sel_peak = slice(prd_idx - window_width//2,prd_idx + window_width//2)
+    lo_peak = np.zeros_like(ft)
+    lo_peak[sel_peak] = ft[sel_peak]*window
 
-    return prd_idx, time
+    if axes:
+        axes.plot(time, abs(lo_peak))
+
+    # detect minima near DC peak
+    # first find index of pm 60 fs, and call that the DC interval
+    dc_left_idx, dc_right_idx = np.abs(time - dc_left_time).argmin(), \
+        np.abs(time-dc_right_time).argmin()
+
+    sel_dc = slice(dc_left_idx, dc_right_idx)
+    dc_peak = np.zeros_like(ft)
+
+    dc_peak[sel_dc] = ft[sel_dc]*get_window(('kaiser', 7), dc_right_idx -
+            dc_left_idx)
+    if axes:
+        axes.plot(time, np.abs(dc_peak), 'c', linewidth=1.2)
+    
+    dt = np.abs(time[1]-time[0])
+
+    freq = np.linspace(freq[0], freq[-1], freq.shape[0]*pad_factor)
+    
+    # estimate of E_LO(w) without phase information
+    E_lo = np.sqrt(np.abs(fft(dc_peak)))
+    E_sig = np.exp(-1j*prd_guess*freq)*fft(lo_peak)/E_lo
+
+    return prd_guess, freq, E_sig, E_lo
 
 def make_6phase_cycler(phase_pairs):
     '''given pairs of phases for pump 1 and pump 2, generates the 
