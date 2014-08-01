@@ -145,7 +145,7 @@ with h5py.File(str(file_path), 'w') as f:
     current_path = nudie.data_folder / tg_info['when'] / tg_info['batch_name']
 
     # load up all available data files
-    for t2 in it.islice(tg_info['t2_range'], 75, 76):
+    for t2 in it.islice(tg_info['t2_range'], 0, 1):
         t2_g = bg.create_group('{:02d}'.format(t2))
         t2_g.attrs['t2'] = tg_info['t2'][t2]
 
@@ -187,33 +187,28 @@ with h5py.File(str(file_path), 'w') as f:
                 stark_idx, nostark_idx = np.where(a2 > 0.2)[0], \
                         np.where(a2 <= 0.2)[0]
                 
-                # subtract the probe scatter by averaging the shutter closed data 
-                # and subtracting it from each waveform of the shutter open data
-                mdata_stark = {}
-                mdata_nostark = {}
-                s_g, n_g = loop_g.create_group('stark'), \
-                        loop_g.create_group('no stark') 
+                # index the points that have both open shutter and stark on
+                stark_shutter, nostark_shutter = {}, {} 
 
+                
                 for k in phase_cycles:
-                    fo = np.intersect1d(tags[0][0][k]['shutter open'], stark_idx,
+                    so = np.intersect1d(tags[0][0][k]['shutter open'], stark_idx,
                             assume_unique=True)
-                    fc = np.intersect1d(tags[0][0][k]['shutter closed'], \
+                    sc = np.intersect1d(tags[0][0][k]['shutter closed'], \
                             stark_idx, assume_unique=True)
-                    mdata_stark[k] = data[:, fo] \
-                            - data[:, fc].mean(axis=-1)[:, np.newaxis]
+                    stark_shutter[k] = (so, sc)
 
                     no = np.intersect1d(tags[0][0][k]['shutter open'], \
                             nostark_idx, assume_unique=True)
                     nc = np.intersect1d(tags[0][0][k]['shutter closed'], \
                             nostark_idx, assume_unique=True)
-                    mdata_nostark[k] = data[:, no] \
-                            - data[:, nc].mean(axis=-1)[:, np.newaxis]
-                
-                for k, v in mdata_stark.items():
-                    s_g[k] = v
-                for k, v in mdata_nostark.items():
-                    n_g[k] = v
+                    nostark_shutter[k] = (no, nc)
 
+                    max_len = max(max_len, len(so), len(sc), len(no), len(nc))
+
+                big_block = np.zeros((1340, 2, 4, max_len))
+                big_block = data[:, range(2), range(4), (stark_shutter, no_stark_shutter)] - 
+                
     # this is how many pixels we have    
     npixels = data.shape[0]
     wl = f['spectrometer calibration/axis'][:]

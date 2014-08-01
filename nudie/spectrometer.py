@@ -40,50 +40,48 @@ def simple_wavelength_axis(groove_density=600, center_wavelength=650,
     return np.linspace(center_wavelength - bw/2, center_wavelength + bw/2, 
             num_pixels)
 
-def wavelen_to_freq(axis, data, ret_df=False):
+def wavelen_to_freq(axis, data, ret_df=False, ax=-1):
     '''convert wavelength in nm to frequency in Hz'''
 
     log.debug('converting wavelength to frequency')
     
     assert len(axis.shape) == 1, 'wavelength axis should be 1D'
-    assert len(data.shape) == 1, 'data assumed to be 1D'
 
     if axis[-1] > axis[0]: # make wavelength go from red to blue
         log.debug('flipping axis and data')
         axis = axis[::-1] 
-        data = data[::-1] 
+        data = data[..., ::-1] 
     
     dat_freq = speed_of_light/axis
     
     # former bug: data needs to be inverted when in frequency space
-    interpolator = interp1d(dat_freq, data, kind='cubic')
+    interpolator = interp1d(dat_freq, data, kind='linear', axis=ax)
 
-    freq, df = np.linspace(dat_freq[0], dat_freq[-1], data.shape[0], retstep=True)
+    freq, df = np.linspace(dat_freq[0], dat_freq[-1], data.shape[-1], retstep=True)
 
     if ret_df:
         return freq, interpolator(freq), df
     else:
         return freq, interpolator(freq)
 
-def freq_to_wavelen(axis, data, ret_dwl=False):
+def freq_to_wavelen(axis, data, ret_dwl=False, ax=-1):
     '''convert wavelength in nm to frequency in Hz'''
 
     log.debug('converting frequency to wavelength')
     
     assert len(axis.shape) == 1, 'wavelength axis should be 1D'
-    assert len(data.shape) == 1, 'data assumed to be 1D'
 
     if axis[-1] > axis[0]: # make frequency go from blue to red
         log.debug('flipping axis and data')
         axis = axis[::-1] 
-        data = data[::-1] 
+        data = data[..., ::-1] 
     
     dat_wl = speed_of_light/axis
     
     # former bug: data needs to be inverted when in frequency space
-    interpolator = interp1d(dat_wl, data, kind='cubic')
+    interpolator = interp1d(dat_wl, data, kind='linear', axis=ax)
 
-    wl, dwl = np.linspace(dat_wl[0], dat_wl[-1], data.shape[0], retstep=True)
+    wl, dwl = np.linspace(dat_wl[0], dat_wl[-1], data.shape[-1], retstep=True)
 
     if ret_dwl:
         return wl, interpolator(wl), dwl 
