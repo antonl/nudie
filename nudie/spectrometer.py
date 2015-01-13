@@ -41,7 +41,7 @@ def simple_wavelength_axis(groove_density=600, center_wavelength=650,
             num_pixels)
 
 def wavelen_to_freq(axis, data, ret_df=False, ax=-1):
-    '''convert wavelength in nm to frequency in Hz'''
+    '''convert wavelength in nm to frequency in THz'''
 
     log.debug('converting wavelength to frequency')
     
@@ -57,7 +57,8 @@ def wavelen_to_freq(axis, data, ret_df=False, ax=-1):
     # former bug: data needs to be inverted when in frequency space
     interpolator = interp1d(dat_freq, data, kind='linear', axis=ax)
 
-    freq, df = np.linspace(dat_freq[0], dat_freq[-1], data.shape[-1], retstep=True)
+    # former bug: issue #7
+    freq, df = np.linspace(dat_freq[0], dat_freq[-1], axis.shape[-1], retstep=True)
 
     if ret_df:
         return freq, interpolator(freq), df
@@ -65,7 +66,7 @@ def wavelen_to_freq(axis, data, ret_df=False, ax=-1):
         return freq, interpolator(freq)
 
 def freq_to_wavelen(axis, data, ret_dwl=False, ax=-1):
-    '''convert wavelength in nm to frequency in Hz'''
+    '''convert frequency in THz to wavelength in nm'''
 
     log.debug('converting frequency to wavelength')
     
@@ -81,7 +82,8 @@ def freq_to_wavelen(axis, data, ret_dwl=False, ax=-1):
     # former bug: data needs to be inverted when in frequency space
     interpolator = interp1d(dat_wl, data, kind='linear', axis=ax)
 
-    wl, dwl = np.linspace(dat_wl[0], dat_wl[-1], data.shape[-1], retstep=True)
+    # former bug: issue #7
+    wl, dwl = np.linspace(dat_wl[0], dat_wl[-1], axis.shape[-1], retstep=True)
 
     if ret_dwl:
         return wl, interpolator(wl), dwl 
