@@ -41,16 +41,24 @@ def simple_wavelength_axis(groove_density=600, center_wavelength=650,
             num_pixels)
 
 def wavelen_to_freq(axis, data, ret_df=False, ax=-1):
-    '''convert wavelength in nm to frequency in THz'''
+    '''convert wavelength in nm to frequency in 1000 THz'''
 
     log.debug('converting wavelength to frequency')
     
     assert len(axis.shape) == 1, 'wavelength axis should be 1D'
-
+    
     if axis[-1] > axis[0]: # make wavelength go from red to blue
         log.debug('flipping axis and data')
+
+        if ax is -1: # avoid -1, doesn't work with flipping algorithm
+            ax = len(data.shape)-1
+
+        # generalize to arbitrary axis flip
+        ind = tuple([slice(None, None, -1) if ax == i else slice(None) \
+                for i in range(len(data.shape))])
+
         axis = axis[::-1] 
-        data = data[..., ::-1] 
+        data = data[ind]        
     
     dat_freq = speed_of_light/axis
     
@@ -66,7 +74,7 @@ def wavelen_to_freq(axis, data, ret_df=False, ax=-1):
         return freq, interpolator(freq)
 
 def freq_to_wavelen(axis, data, ret_dwl=False, ax=-1):
-    '''convert frequency in THz to wavelength in nm'''
+    '''convert frequency in 1000 THz to wavelength in nm'''
 
     log.debug('converting frequency to wavelength')
     
@@ -74,9 +82,16 @@ def freq_to_wavelen(axis, data, ret_dwl=False, ax=-1):
 
     if axis[-1] > axis[0]: # make frequency go from blue to red
         log.debug('flipping axis and data')
+
+        if ax is -1: # avoid -1, doesn't work with flipping algorithm
+            ax = len(data.shape)-1
+
+        # generalize to arbitrary axis flip
+        ind = tuple([slice(None, None, -1) if ax == i else slice(None) \
+                for i in range(len(data.shape))])
         axis = axis[::-1] 
-        data = data[..., ::-1] 
-    
+        data = data[ind]
+
     dat_wl = speed_of_light/axis
     
     # former bug: data needs to be inverted when in frequency space
