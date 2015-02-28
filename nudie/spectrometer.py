@@ -132,7 +132,6 @@ def wavelen_to_freq(axis, data, ret_df=False, ax=-1):
 
     Returns
     -------
-
     frequency : float array, (N,)
         
         The interpolated frequency axis of length N in units of 1000 THz.
@@ -153,7 +152,15 @@ def wavelen_to_freq(axis, data, ret_df=False, ax=-1):
 
     log.debug('converting wavelength to frequency')
     
-    assert len(axis.shape) == 1, 'wavelength axis should be 1D'
+    if len(axis.shape) != 1:
+        s = 'wavelength axis should be 1D'
+        log.error(s)
+        raise ValueError(s)
+    
+    if ax > len(data.shape) - 1: 
+        s = 'ax index longer than data array dimension'
+        log.error(s)
+        raise ValueError(s)
     
     if axis[-1] > axis[0]: # make wavelength go from red to blue
         log.debug('flipping axis and data')
@@ -161,9 +168,6 @@ def wavelen_to_freq(axis, data, ret_df=False, ax=-1):
         if ax is -1: # avoid -1, doesn't work with flipping algorithm
             ax = len(data.shape)-1
         
-        assert ax < len(data.shape), 'ax index longer than data array ' +\
-                'dimension'
-
         # generalize to arbitrary axis flip
         ind = tuple([slice(None, None, -1) if ax == i else slice(None) \
                 for i in range(len(data.shape))])
@@ -215,7 +219,6 @@ def freq_to_wavelen(axis, data, ret_dwl=False, ax=-1):
 
     Returns
     -------
-
     wavelength : float array, (N,)
         
         The interpolated wavelength axis of length N in units of nm.
@@ -225,9 +228,8 @@ def freq_to_wavelen(axis, data, ret_dwl=False, ax=-1):
         Interpolated data array.
 
     dwl : float, optional
-
-        The wavelength step of the :param:`wavelength`. Returned when
-        :param:`ret_df` is False
+        The wavelength step of the `wavelength`. Returned when
+        `ret_df` is False
 
     See Also
     --------
@@ -235,16 +237,21 @@ def freq_to_wavelen(axis, data, ret_dwl=False, ax=-1):
     """
     log.debug('converting frequency to wavelength')
     
-    assert len(axis.shape) == 1, 'wavelength axis should be 1D'
+    if len(axis.shape) != 1:
+        s = 'wavelength axis should be 1D'
+        log.error(s)
+        raise ValueError(s)
+
+    if ax > len(data.shape) - 1: 
+        s = 'ax index longer than data array dimension'
+        log.error(s)
+        raise ValueError(s)
 
     if axis[-1] > axis[0]: # make frequency go from blue to red
         log.debug('flipping axis and data')
 
         if ax is -1: # avoid -1, doesn't work with flipping algorithm
             ax = len(data.shape)-1
-
-        assert ax < len(data.shape), 'ax index longer than data array ' +\
-                'dimension'
 
         # generalize to arbitrary axis flip
         ind = tuple([slice(None, None, -1) if ax == i else slice(None) \
