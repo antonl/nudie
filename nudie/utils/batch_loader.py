@@ -54,7 +54,7 @@ def load_job(job_name, when='today', batch_set=set([0]), data_path=data_folder):
         log.error(s) 
         raise ValueError(s)
     
-    for n, batch in enumerate(batch_set):
+    for batch in batch_set:
         s = job_name + '-batch{:02d}'.format(batch)
         # this might not be the best idea because this information
         # could be accessed on a different operating system
@@ -70,7 +70,7 @@ def load_job(job_name, when='today', batch_set=set([0]), data_path=data_folder):
             continue
 
         batch_info = _examine_batch_dir(job_name, batch_path)
-        batch_info['batch_no'] = n
+        batch_info['batch_no'] = batch
         batch_info['batch_name'] = s
         batch_info['when'] = when
         batch_info['job_name'] = job_name

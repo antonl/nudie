@@ -309,3 +309,15 @@ def test_determine_shutter_shots():
     assert abs(tduty_cycle - duty_cycle) < 1e-3, \
             'incorrect duty cycle estimated'
 
+def test_load_job_issue6():
+    '''this is a test for regression of issue #6 on github. currently requires
+    access to the data folder, so not a portable test!'''
+
+    stark_name = 'd1d2-linear-stark'
+    stark_batch = 4
+    when = '14-06-28'
+
+    # load up pp data to use
+    stark_info = next(nudie.load_job(job_name=stark_name, batch_set=[stark_batch], when=when))
+
+    assert stark_info['batch_no'] == stark_batch, 'Incorrect assignment of batch!'
