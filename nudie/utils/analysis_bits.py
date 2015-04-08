@@ -357,6 +357,30 @@ def tag_phases(table_start_detect, period, tags, nframes, waveform_repeat=1,
 
     return waveform_store
 
+def remove_incomplete_t1_waveforms(tags, phases):
+    '''clean up tags structure so that in every t1 the length of phases is the
+    same
+
+    THIS MUTATES THE TAG STRUCTURE!
+    '''
+
+    first = phases[0]
+    last = phases[-1]
+    for rep in tags:
+        for t1 in rep:
+            first_idx = t1[first]['shutter open'][0]
+            last_idx = t1[last]['shutter open'][-1]
+
+            for phase in phases[1:]: # skip the first phase
+                if t1[phase]['shutter open'][0] < first_idx:
+                    t1[phase]['shutter open'].popleft()
+
+            for phase in phases[:-1]: # skip the last phase
+                if t1[phase]['shutter open'][-1] > last_idx:
+                    t1[phase]['shutter open'].pop()
+
+    return tags
+
 def select_prd_peak(wl, data, window=None, axes=None, known_prd=None):
     assert len(data.shape) == 1, 'expected spectrum averaged over ' +\
             'camera frames'

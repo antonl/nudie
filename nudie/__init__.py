@@ -20,7 +20,7 @@ from .version import version
 from .utils.analysis_bits import tag_phases, cleanup_analogtxt, \
     detect_table_start, synchronize_daq_to_camera, load_analogtxt, \
     determine_shutter_shots, load_camera_file, trim_all, \
-    make_6phase_cycler, select_prd_peak
+    make_6phase_cycler, select_prd_peak, remove_incomplete_t1_waveforms
 
 try:
     mount_point, data_folder = setup_paths()
