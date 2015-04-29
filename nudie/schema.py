@@ -110,28 +110,28 @@ def parse_config(path):
                 allow_no_value=False)
         log.debug('setting defaults:')
         for sec, val in defaults.items():
-            log.debug('\t{!s}: {!s}'.format(sec, val))
+            log.debug('  {!s}: {!s}'.format(sec, val))
         cfg.read_dict(defaults)
         cfg.read(str(path))
 
         log.debug('parsed:')
         for sec, val in cfg.items():
-            log.debug('\t{!s}:'.format(sec))
+            log.debug('  {!s}:'.format(sec))
             for subsec, subval in val.items():
-                log.debug('\t\t{!s}: {!s}'.format(subsec, subval))
+                log.debug('    {!s}: {!s}'.format(subsec, subval))
 
         log.debug('validating to schema')
         validated = schema(as_dict(cfg))
 
         log.debug('final schema is:')
         for sec, val in validated.items():
-            log.debug('\t{!s}:'.format(sec))
+            log.debug('  {!s}:'.format(sec))
             for subsec, subval in val.items():
-                log.debug('\t\t{!s}: {!s}'.format(subsec, subval))
+                log.debug('    {!s}: {!s}'.format(subsec, subval))
     except configparser.Error as e:
         s = 'error while parsing file `{!s}`'.format(path)
         log.error(s)
-        log.error(e.str())
+        log.error(e)
         raise RuntimeError(s)
     except voluptuous.MultipleInvalid as e:
         log.error(e)

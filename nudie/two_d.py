@@ -6,17 +6,12 @@ from __future__ import division, unicode_literals
 import nudie
 import h5py
 import itertools as it
-from scipy.signal import argrelmax, get_window
 from scipy.optimize import minimize
 from scipy.io import loadmat
 from pathlib import Path
 from collections import deque
 import numpy as np
 import arrow
-import pdb
-
-# turn on printing of errors
-nudie.show_errors(nudie.logging.INFO)
 
 def load_wavelengths(path):
     '''load a pre-calibrated wavengths file generated with the
@@ -271,16 +266,16 @@ def run(dd_name, dd_batch, when='today', wavelengths=None, plot=False,
 if __name__ == '__main__':
     from sys import argv
 
-    try:
-        cfg = configparser.ConfigParser(default_section='common',
-                dict_type=dict,
-                interpolation=configparser.ExtendedInterpolation(), 
-                empty_lines_in_values=False, 
-                allow_no_value=True)
-        cfg.read_dict(dd_defaults)
-        cfg.read(args['config'])
+    # turn on printing of errors
+    nudie.show_errors(nudie.logging.INFO)
 
-        val = dd_schema(config_to_dict(cfg))['2d']
+    if len(argv) < 2:
+        s = 'need a configuration file name as a parameter'
+        nudie.error(s)
+        raise RuntimeError(s)
+
+    try:
+        val = nudie.parse_config(argv[1])['2d']
 
         if val['stark']:
             s = 'the stark flag is set in the configuration. You should be ' +\
