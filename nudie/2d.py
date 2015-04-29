@@ -15,21 +15,8 @@ import numpy as np
 import arrow
 import pdb
 
-# for reading options
-import argparse
-import configparser
-from voluptuous import Schema, Required, Coerce, Optional, ALLOW_EXTRA
-
 # turn on printing of errors
 nudie.show_errors(nudie.logging.INFO)
-
-def make_parser():
-    parser = argparse.ArgumentParser(
-        description='Analyze a single 2D ES dataset and output a hdf5 ' +\
-                'file with the analysis')
-    parser.add_argument('config', type=str, action='store', 
-        help='configuration file for running the analysis')
-    return parser
 
 def load_wavelengths(path):
     '''load a pre-calibrated wavengths file generated with the
@@ -281,71 +268,9 @@ def run(dd_name, dd_batch, when='today', wavelengths=None, plot=False,
             tmp.dims[2].attach_scale(gaxes['detection frequency'])
             tmp.dims[2].attach_scale(gaxes['detection wavelength'])
 
-def config_to_dict(cfg):
-    truthy = ['true', 'yes', '1', 'on']
-    falsy = ['false', 'no', '0', 'off']
-    
-    final = dict()
-    for name, sec in cfg.items():
-        tmp = dict()
-        for k,v in sec.items():
-            if v.lower() in truthy:
-                tmp[k] = True
-            elif v.lower() in falsy:
-                tmp[k] = False
-            else:
-                tmp[k] = v                
-        final[name] = tmp
-    return final 
-
-class IntList(list):
-    def __init__(self, s):
-        if s == '' or s is None:
-            super(IntList, self).__init__([])
-        else:            
-            super(IntList, self).__init__(map(int, s.split(',')))
-
-dd_schema = Schema(
-    {'2d': {
-        Required('jobname'): str,
-        Required('batch'): Coerce(int),
-        Required('when'): str, # probably should validate to a valid date
-        Required('wavelengths'): str,
-        Optional('waveforms per table'): Coerce(int),
-        Optional('central wl'): Coerce(float),
-        Optional('phaselock wl'): Coerce(float),
-        Optional('plot'): bool,
-        Optional('force'): bool,
-        Optional('stark'): bool,
-        Optional('probe ref delay'): Coerce(float), 
-        Optional('lo width'): Coerce(float),
-        Optional('dc width'): Coerce(float),
-        Optional('zero pad to'): Coerce(int),
-        Optional('gaussian power'): Coerce(float),
-        Optional('pump chop'): bool,
-        },
-    }, extra=ALLOW_EXTRA)
-
-dd_defaults = {'2d' : {
-        'plot'    : False,
-        'force'   : False,
-        'pump chop' : False,
-        'stark' : False,
-        'waveforms per table' : 40,
-        'central wl' : 650,
-        'phaselock wl'  : 650,
-        'probe ref delay' : 850.,
-        'lo width' : 200,
-        'dc width' : 200,
-        'zero pad to' : 2048,
-        'analysis path' : 'analyzed',
-        'gaussian power' : 2,
-        }}
-
 if __name__ == '__main__':
-    parser = make_parser()
-    args = vars(parser.parse_args())
-    
+    from sys import argv
+
     try:
         cfg = configparser.ConfigParser(default_section='common',
                 dict_type=dict,

@@ -22,6 +22,8 @@ from .utils.analysis_bits import tag_phases, cleanup_analogtxt, \
     determine_shutter_shots, load_camera_file, trim_all, \
     make_6phase_cycler, select_prd_peak, remove_incomplete_t1_waveforms
 
+from .schema import parse_config
+
 try:
     mount_point, data_folder = setup_paths()
 except RuntimeError as e:
