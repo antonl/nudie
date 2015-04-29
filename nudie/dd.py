@@ -271,7 +271,7 @@ if __name__ == '__main__':
 
     if len(argv) < 2:
         s = 'need a configuration file name as a parameter'
-        nudie.error(s)
+        nudie.log.error(s)
         raise RuntimeError(s)
 
     try:

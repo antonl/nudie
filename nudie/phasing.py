@@ -12,25 +12,8 @@ from pathlib import Path
 from collections import deque
 import numpy as np
 import arrow
-import pdb
 import matplotlib.pyplot as mpl
 from math import floor
-
-# for reading options
-import argparse
-import configparser
-from voluptuous import Schema, Required, Coerce, Optional, ALLOW_EXTRA
-
-# turn on printing of errors
-nudie.show_errors(nudie.logging.WARNING)
-
-def make_parser():
-    parser = argparse.ArgumentParser(
-        description='Phase a 2D spectrum by comparing it to a pump probe ' +\
-                'data set')
-    parser.add_argument('config', type=str, action='store', 
-        help='configuration file for running the analysis')
-    return parser
 
 def make_objective(f, pp, tg, limits=(None, None)):
     '''create objective function for matching pump probe to TG'''
@@ -271,87 +254,18 @@ def run(path, pp_name, pp_batch, dd_name, dd_batch, plot=False, force=False,
 
         del phased_2D
 
-def config_to_dict(cfg):
-    truthy = ['true', 'yes', '1', 'on']
-    falsy = ['false', 'no', '0', 'off']
-    
-    final = dict()
-    for name, sec in cfg.items():
-        tmp = dict()
-        for k,v in sec.items():
-            if v.lower() in truthy:
-                tmp[k] = True
-            elif v.lower() in falsy:
-                tmp[k] = False
-            else:
-                tmp[k] = v                
-        final[name] = tmp
-    return final 
-
-class IntList(list):
-    def __init__(self, s):
-        if s == '' or s is None:
-            super(IntList, self).__init__([])
-        else:            
-            super(IntList, self).__init__(map(int, s.split(',')))
-
-class FloatList(list):
-    def __init__(self, s):
-        if s == '' or s is None:
-            super(FloatList, self).__init__([])
-        else:            
-            super(FloatList, self).__init__(map(float, s.split(',')))
-
-phasing_schema = Schema(
-    {'phasing': {
-        Required('path'): str,
-        Required('reference name'): str,
-        Required('reference batch'): Coerce(int),
-        Required('2d name'): str,
-        Required('2d batch'): Coerce(int),
-        Optional('copy'): bool,
-        Optional('phasing guess'): Coerce(FloatList),
-        Optional('zero pad to'): Coerce(int),
-        Optional('nsteps'): Coerce(int),
-        Optional('nstep success'): Coerce(int),
-        Optional('pixel range to fit'): Coerce(IntList), # check that lb < ub
-        Optional('force'): bool,
-        Optional('plot'): bool,
-        Optional('phaselock wl'): Coerce(float),
-        Optional('central wl'): Coerce(float),
-        Optional('phasing t2'): Coerce(float),
-        },
-    }, extra=ALLOW_EXTRA)
-
-phasing_defaults = {'phasing' : {
-    'force': False,
-    'plot' : False,
-    'copy': False,
-    'phasing guess': [25, 850, 0],
-    'zero pad to' : 2048,
-    'nsteps' : 300,
-    'nstep success' : 100,
-    'pixel range to fit': (0, 1340),
-    'zero pad to' : 128,
-    'phaselock wl' : 650,
-    'central wl' : 650,
-    'phasing t2' : 10000,
-        }}
-    
 if __name__ == '__main__':
-    parser = make_parser()
-    args = vars(parser.parse_args())
+    from sys import argv
+    # turn on printing of errors
+    nudie.show_errors(nudie.logging.INFO)
+
+    if len(argv) < 2:
+        s = 'need a configuration file name as a parameter'
+        nudie.log.error(s)
+        raise RuntimeError(s)
 
     try:
-        cfg = configparser.ConfigParser(default_section='common',
-                dict_type=dict,
-                interpolation=configparser.ExtendedInterpolation(), 
-                empty_lines_in_values=False, 
-                allow_no_value=True)
-        cfg.read_dict(phasing_defaults)
-        cfg.read(args['config'])
-
-        val = phasing_schema(config_to_dict(cfg))['phasing']
+        val = nudie.parse_config(argv[1])['phasing']
 
         if val['copy'] is True:
             s = '`copy` flag is set. You should be using the apply-phase.py ' +\

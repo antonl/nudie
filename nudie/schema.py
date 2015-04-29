@@ -39,6 +39,13 @@ class IntList(list):
         else:            
             super(IntList, self).__init__(map(int, s.split(',')))
 
+class FloatList(list):
+    def __init__(self, s):
+        if s == '' or s is None:
+            super(FloatList, self).__init__([])
+        else:            
+            super(FloatList, self).__init__(map(float, s.split(',')))
+
 def as_dict(config):
     """
     Converts a ConfigParser object into a dictionary.
@@ -55,18 +62,31 @@ def as_dict(config):
             the_dict[section][key] = val
     return the_dict
 
+# Optional and Required are a little interchangable because I pass default
+# parameters anyway
 schema = Schema({
-    '2d': {
+  'pump probe': {
         Required('jobname'): str,
         Required('batch'): Coerce(int),
         Required('when'): str, # probably should validate to a valid date
         Required('wavelengths'): str,
+        Required('analysis path'): str,
+        Optional('plot'): Coerce(BoolStr),
+        Optional('exclude'): Coerce(IntList),
+        },
+  '2d': {
+        Required('jobname'): str,
+        Required('batch'): Coerce(int),
+        Required('when'): str, # probably should validate to a valid date
+        Required('wavelengths'): str,
+        Required('analysis path'): str,
         Optional('waveforms per table'): Coerce(int),
         Optional('central wl'): Coerce(float),
         Optional('phaselock wl'): Coerce(float),
         Optional('plot'): Coerce(BoolStr),
         Optional('force'): Coerce(BoolStr),
         Optional('stark'): Coerce(BoolStr),
+        Optional('field on theshold'): Coerce(float),
         Optional('probe ref delay'): Coerce(float), 
         Optional('lo width'): Coerce(float),
         Optional('dc width'): Coerce(float),
@@ -74,14 +94,37 @@ schema = Schema({
         Optional('gaussian power'): Coerce(float),
         Optional('pump chop'): Coerce(BoolStr),
         },
+    'phasing': {
+        Required('path'): str,
+        Required('reference name'): str,
+        Required('reference batch'): Coerce(int),
+        Required('2d name'): str,
+        Required('2d batch'): Coerce(int),
+        Optional('copy'): Coerce(BoolStr),
+        Optional('phasing guess'): Coerce(FloatList),
+        Optional('zero pad to'): Coerce(int),
+        Optional('nsteps'): Coerce(int),
+        Optional('nstep success'): Coerce(int),
+        Optional('pixel range to fit'): Coerce(IntList), # check that lb < ub
+        Optional('force'): Coerce(BoolStr),
+        Optional('plot'): Coerce(BoolStr),
+        Optional('phaselock wl'): Coerce(float),
+        Optional('central wl'): Coerce(float),
+        Optional('phasing t2'): Coerce(float),
+        },
     }, extra=REMOVE_EXTRA)
 
 defaults = {
+    'pump probe': {
+        'exclude' : '',
+        'plot'    : False,
+        },
     '2d' : {
         'plot' : False,
         'force' : False,
         'pump chop' : False,
         'stark' : False,
+        'field on theshold': 0.2,
         'waveforms per table' : 40,
         'central wl' : 650,
         'phaselock wl'  : 650,
@@ -91,7 +134,21 @@ defaults = {
         'zero pad to' : 2048,
         'analysis path' : 'analyzed',
         'gaussian power' : 2,
-        }
+        },
+    'phasing': {
+        'force': False,
+        'plot' : False,
+        'copy': False,
+        'phasing guess': [25, 850, 0],
+        'zero pad to' : 2048,
+        'nsteps' : 300,
+        'nstep success' : 100,
+        'pixel range to fit': (0, 1340),
+        'zero pad to' : 128,
+        'phaselock wl' : 650,
+        'central wl' : 650,
+        'phasing t2' : 10000,
+        },
     }
 
 def parse_config(path):
@@ -107,7 +164,7 @@ def parse_config(path):
         cfg = configparser.ConfigParser(default_section='common',
                 interpolation=configparser.ExtendedInterpolation(), 
                 empty_lines_in_values=False, 
-                allow_no_value=False)
+                allow_no_value=True)
         log.debug('setting defaults:')
         for sec, val in defaults.items():
             log.debug('  {!s}: {!s}'.format(sec, val))
@@ -138,3 +195,4 @@ def parse_config(path):
         raise RuntimeError(s)
 
     return validated
+

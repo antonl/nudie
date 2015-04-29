@@ -18,14 +18,6 @@ import arrow
 import matplotlib.pylab as mpl
 import pdb
 
-# for reading options
-import argparse
-import configparser
-from voluptuous import Schema, Required, Coerce, Optional, ALLOW_EXTRA
-
-# turn on printing of errors
-nudie.show_errors(nudie.logging.WARNING)
-
 def make_parser():
     parser = argparse.ArgumentParser(
         description='Analyze a single pump-probe dataset and output a hdf5 ' +\
@@ -203,62 +195,19 @@ def run(pp_name, pp_batch, when='today', wavelengths=None, plot=False,
         app.dims[1].attach_scale(gaxes['detection frequency'])
         app.dims[1].attach_scale(gaxes['detection wavelength'])
 
-def config_to_dict(cfg):
-    truthy = ['true', 'yes', '1', 'on']
-    falsy = ['false', 'no', '0', 'off']
-    
-    final = dict()
-    for name, sec in cfg.items():
-        tmp = dict()
-        for k,v in sec.items():
-            if v.lower() in truthy:
-                tmp[k] = True
-            elif v.lower() in falsy:
-                tmp[k] = False
-            else:
-                tmp[k] = v                
-        final[name] = tmp
-    return final 
-
-class IntList(list):
-    def __init__(self, s):
-        if s == '' or s is None:
-            super(IntList, self).__init__([])
-        else:            
-            super(IntList, self).__init__(map(int, s.split(',')))
-
-pp_schema = Schema(
-    {'pump probe': {
-        Required('jobname'): str,
-        Required('batch'): Coerce(int),
-        Required('when'): str, # probably should validate to a valid date
-        Required('wavelengths'): str,
-        Optional('plot'): bool,
-        Optional('analysis path'): str,
-        Optional('exclude'): Coerce(IntList),
-        },
-    }, extra=ALLOW_EXTRA)
-
-pp_defaults = {'pump probe' : {
-        'exclude' : '',
-        'analysis path' : 'analyzed',
-        'plot'    : False,
-        }}
-
 if __name__ == '__main__':
-    parser = make_parser()
-    args = vars(parser.parse_args())
+    from sys import argv
+
+    # turn on printing of errors
+    nudie.show_errors(nudie.logging.INFO)
+
+    if len(argv) < 2:
+        s = 'need a configuration file name as a parameter'
+        nudie.log.error(s)
+        raise RuntimeError(s)
 
     try:
-        cfg = configparser.ConfigParser(default_section='common',
-                dict_type=dict,
-                interpolation=configparser.ExtendedInterpolation(), 
-                empty_lines_in_values=False, 
-                allow_no_value=True)
-        cfg.read_dict(pp_defaults)
-        cfg.read(args['config'])
-
-        val = pp_schema(config_to_dict(cfg))['pump probe']
+        val = nudie.parse_config(argv[1])['pump probe']
         
         run(pp_name=val['jobname'], pp_batch=val['batch'],
                 when=val['when'], plot=val['plot'],

@@ -17,23 +17,8 @@ import pdb
 import matplotlib
 import matplotlib.pyplot as mpl
 
-# for reading options
-import argparse
-import configparser
-from voluptuous import Schema, Required, Coerce, Optional, ALLOW_EXTRA
-
-# turn on printing of errors
-nudie.show_errors(nudie.logging.WARNING)
 matplotlib.rcParams['figure.figsize'] = (16,12)
 matplotlib.use('Qt4Agg')
-
-def make_parser():
-    parser = argparse.ArgumentParser(
-        description='Analyze a single Stark 2D ES dataset and output a hdf5 ' +\
-                'file with the analysis')
-    parser.add_argument('config', type=str, action='store', 
-        help='configuration file for running the analysis')
-    return parser
 
 def load_wavelengths(path):
     '''load a pre-calibrated wavengths file generated with the
@@ -320,85 +305,23 @@ def run(dd_name, dd_batch, when='today', wavelengths=None, plot=False,
             tmp.dims[3].attach_scale(gaxes['detection frequency'])
             tmp.dims[3].attach_scale(gaxes['detection wavelength'])
 
-def config_to_dict(cfg):
-    truthy = ['true', 'yes', '1', 'on']
-    falsy = ['false', 'no', '0', 'off']
-    
-    final = dict()
-    for name, sec in cfg.items():
-        tmp = dict()
-        for k,v in sec.items():
-            if v.lower() in truthy:
-                tmp[k] = True
-            elif v.lower() in falsy:
-                tmp[k] = False
-            else:
-                tmp[k] = v                
-        final[name] = tmp
-    return final 
-
-class IntList(list):
-    def __init__(self, s):
-        if s == '' or s is None:
-            super(IntList, self).__init__([])
-        else:            
-            super(IntList, self).__init__(map(int, s.split(',')))
-
-dd_schema = Schema(
-    {'2d': {
-        Required('jobname'): str,
-        Required('batch'): Coerce(int),
-        Required('when'): str, # probably should validate to a valid date
-        Required('wavelengths'): str,
-        Optional('waveforms per table'): Coerce(int),
-        Optional('central wl'): Coerce(float),
-        Optional('phaselock wl'): Coerce(float),
-        Optional('plot'): bool,
-        Optional('force'): bool,
-        Optional('probe ref delay'): Coerce(float), 
-        Optional('lo width'): Coerce(float),
-        Optional('dc width'): Coerce(float),
-        Optional('gaussian power'): Coerce(float),
-        Optional('zero pad to'): Coerce(int),
-        Optional('field on threshold'): Coerce(float),
-        Optional('stark'): bool,
-        },
-    }, extra=ALLOW_EXTRA)
-
-dd_defaults = {'2d' : {
-        'plot'    : False,
-        'force'   : False,
-        'stark' : False,
-        'waveforms per table' : 40,
-        'central wl' : 650,
-        'phaselock wl'  : 650,
-        'probe ref delay' : 850.,
-        'lo width' : 200,
-        'dc width' : 200,
-        'gaussian power' : 2,
-        'zero pad to' : 2048,
-        'analysis path' : 'analyzed',
-        'field on threshold': 0.2
-        }}
-
 if __name__ == '__main__':
-    parser = make_parser()
-    args = vars(parser.parse_args())
-    
-    try:
-        cfg = configparser.ConfigParser(default_section='common',
-                dict_type=dict,
-                interpolation=configparser.ExtendedInterpolation(), 
-                empty_lines_in_values=False, 
-                allow_no_value=True)
-        cfg.read_dict(dd_defaults)
-        cfg.read(args['config'])
+    from sys import argv
 
-        val = dd_schema(config_to_dict(cfg))['2d']
+    # turn on printing of errors
+    nudie.show_errors(nudie.logging.INFO)
+
+    if len(argv) < 2:
+        s = 'need a configuration file name as a parameter'
+        nudie.log.error(s)
+        raise RuntimeError(s)
+
+    try:
+        val = nudie.parse_config(argv[1])['2d']
     
         if val['stark'] != True:
             s = 'this is not a stark dataset according to the config file. ' +\
-                    'Are you sure you shouldn\'t be running the 2d.py script?'
+                    'Are you sure you shouldn\'t be running the 2d script?'
             nudie.log.error(s)
             raise RuntimeError(s)
 
