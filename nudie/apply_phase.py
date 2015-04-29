@@ -156,6 +156,7 @@ def run(path, ref_name, ref_batch, dd_name, dd_batch, plot=False,
         # attach phased 2D attribute
         sf.attrs['phased'] = True
         sf.attrs['phasing timestamp'] = arrow.now().format('DD-MM-YYYY HH:MM')
+        sf.attrs['nudie version'] = nudie.version
 
         if plot:
             if stark:

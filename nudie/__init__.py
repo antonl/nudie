@@ -16,7 +16,7 @@ from .spectrometer import simple_wavelength_axis, wavelen_to_freq, \
     freq_to_wavelen
 from .utils.winspec import SpeFile
 from .utils.paths import setup_paths
-from .version import version
+from .version import version, parse_version
 from .utils.analysis_bits import tag_phases, cleanup_analogtxt, \
     detect_table_start, synchronize_daq_to_camera, load_analogtxt, \
     determine_shutter_shots, load_camera_file, trim_all, \

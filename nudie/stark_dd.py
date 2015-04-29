@@ -274,7 +274,7 @@ def run(dd_name, dd_batch, when='today', wavelengths=None, plot=False,
 
         sf.attrs['probe lo delay estimate'] = prd_est
         sf.attrs['analysis timestamp'] = arrow.now().format('DD-MM-YYYY HH:mm')
-        #sf.attrs['nudie version'] = nudie.get_version() # TODO: add this to nudie 
+        sf.attrs['nudie version'] = nudie.version 
         
         # write out axes
         gaxes = sf.require_group('axes')

@@ -246,6 +246,7 @@ def run(path, pp_name, pp_batch, dd_name, dd_batch, plot=False, force=False,
         # attach phased 2D attribute
         sf.attrs['phased'] = True
         sf.attrs['phasing timestamp'] = arrow.now().format('DD-MM-YYYY HH:mm')
+        sf.attrs['nudie version'] = nudie.version
 
         if plot:
             mpl.contourf(f1_pl, sf['axes/detection frequency'], 
