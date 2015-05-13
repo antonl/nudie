@@ -16,7 +16,7 @@ import arrow
 import matplotlib.pyplot as mpl
 
 def run(path, ref_name, ref_batch, dd_name, dd_batch, plot=False,
-        force=False, central_wl=-1, phaselock_wl=-1, stark=False):
+        force=False, central_wl=-1, phaselock_wl=-1, stark=False, pad_to=2048):
     path = Path(path)
 
     # create folder if it doesn't exist
@@ -109,11 +109,11 @@ def run(path, ref_name, ref_batch, dd_name, dd_batch, plot=False,
         if stark:
             Rw1 = np.fft.fft(R, axis=2, n=pad_to)
             NRw1 = np.fft.fft(NR, axis=2, n=pad_to)
-            Sw1 = np.fft.fftshift(0.5*(Rw1[:, :, ::-1] + NRw1), axes=2)
+            Sw1 = np.fft.fftshift(0.5*(Rw1[:, :, ::-1] + NRw1), axes=(2,))
         else:
             Rw1 = np.fft.fft(R, axis=1, n=pad_to)
             NRw1 = np.fft.fft(NR, axis=1, n=pad_to)
-            Sw1 = np.fft.fftshift(0.5*(Rw1[:, ::-1] + NRw1), axes=1)
+            Sw1 = np.fft.fftshift(0.5*(Rw1[:, ::-1] + NRw1), axes=(1,))
 
         phased_Rw1 = correction_multiplier*Rw1 + correction_offset
         r = sf.require_dataset('phased rephasing', shape=spectra_shape,
@@ -190,7 +190,7 @@ if __name__ == '__main__':
         val = nudie.parse_config(argv[1])['phasing']
 
         if val['copy'] is False:
-            s = '`copy` flag is not set. You should be using the phaseing.py ' +\
+            s = '`copy` flag is not set. You should be using the phasing.py ' +\
                 'script instead'
             nudie.log.error(s)
             raise RuntimeError(s)
@@ -204,7 +204,8 @@ if __name__ == '__main__':
                 force=val['force'],
                 phaselock_wl=val['phaselock wl'], 
                 central_wl=val['central wl'],
-                stark=val['stark'])
+                stark=val['stark'],
+                pad_to=val['zero pad to'])
 
     except Exception as e:
         raise e
