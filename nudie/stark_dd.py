@@ -66,7 +66,7 @@ def run(dd_name, dd_batch, when='today', wavelengths=None, plot=False,
     current_path = Path(dd_info['batch_path'])
 
     # generate hdf filename based on data date
-    analysis_folder = Path(analysis_path) / dd_info['when']
+    analysis_folder = Path(analysis_path)
 
     # create folder if it doesn't exist
     if not analysis_folder.exists():
@@ -186,10 +186,10 @@ def run(dd_name, dd_batch, when='today', wavelengths=None, plot=False,
             assert np.logical_xor(np.all(cc), np.all(dc)), \
                 'detected stark synchronization error, offset 1, phase %s' % str(k)
 
-            #assert np.logical_xor(np.all(ao), np.all(co)), \
-            #    'detected stark synchronization error, offset 0, phase %s' % str(k)
-            #assert np.logical_xor(np.all(bo), np.all(do)), \
-            #    'detected stark synchronization error, offset 1, phase %s' % str(k)
+            assert np.logical_xor(np.all(ao), np.all(co)), \
+                'detected stark synchronization error, offset 0, phase %s' % str(k)
+            assert np.logical_xor(np.all(bo), np.all(do)), \
+                'detected stark synchronization error, offset 1, phase %s' % str(k)
 
         # determine stark-on indexes
         stark_idx = np.where(a2 > min_field)[0]
