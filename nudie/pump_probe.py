@@ -59,7 +59,7 @@ def run(pp_name, pp_batch, when='today', wavelengths=None, plot=False,
     current_path = Path(pp_info['batch_path'])
 
     # generate hdf filename based on data date
-    analysis_folder = Path(analysis_path) / pp_info['when']
+    analysis_folder = Path(analysis_path)
 
     # create folder if it doesn't exist
     if not analysis_folder.exists():

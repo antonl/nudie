@@ -18,7 +18,7 @@ class BoolStr(str):
     falsy = ['false', 'no', '0', 'off']
     
     def __bool__(self):
-        s = self.lower()
+        s = self.strip().lower()
         if s in self.truthy:
             return True
         elif s in self.falsy:
@@ -28,6 +28,9 @@ class BoolStr(str):
 
     def __eq__(self, other):
         return bool(self) == other
+
+    def __ne__(self, other):
+        return not (bool(self) == other)
 
     def __repr__(self):
         return 'BoolStr(' + self + ')'
@@ -86,7 +89,7 @@ schema = Schema({
         Optional('plot'): Coerce(BoolStr),
         Optional('force'): Coerce(BoolStr),
         Optional('stark'): Coerce(BoolStr),
-        Optional('field on theshold'): Coerce(float),
+        Optional('field on threshold'): Coerce(float),
         Optional('probe ref delay'): Coerce(float), 
         Optional('lo width'): Coerce(float),
         Optional('dc width'): Coerce(float),
@@ -108,6 +111,7 @@ schema = Schema({
         Optional('pixel range to fit'): Coerce(IntList), # check that lb < ub
         Optional('force'): Coerce(BoolStr),
         Optional('plot'): Coerce(BoolStr),
+        Optional('stark'): Coerce(BoolStr),
         Optional('phaselock wl'): Coerce(float),
         Optional('central wl'): Coerce(float),
         Optional('phasing t2'): Coerce(float),
@@ -124,7 +128,7 @@ defaults = {
         'force' : False,
         'pump chop' : False,
         'stark' : False,
-        'field on theshold': 0.2,
+        'field on threshold': 0.2,
         'waveforms per table' : 40,
         'central wl' : 650,
         'phaselock wl'  : 650,
@@ -132,7 +136,6 @@ defaults = {
         'lo width' : 200,
         'dc width' : 200,
         'zero pad to' : 2048,
-        'analysis path' : 'analyzed',
         'gaussian power' : 2,
         },
     'phasing': {
@@ -184,7 +187,7 @@ def parse_config(path):
         for sec, val in validated.items():
             log.debug('  {!s}:'.format(sec))
             for subsec, subval in val.items():
-                log.debug('    {!s}: {!s}'.format(subsec, subval))
+                log.debug('    {!s}: {!s}'.format(subsec, repr(subval)))
     except configparser.Error as e:
         s = 'error while parsing file `{!s}`'.format(path)
         log.error(s)
