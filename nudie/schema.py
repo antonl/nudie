@@ -96,6 +96,7 @@ schema = Schema({
         Optional('zero pad to'): Coerce(int),
         Optional('gaussian power'): Coerce(float),
         Optional('pump chop'): Coerce(BoolStr),
+        Optional('detrend t1'): Coerce(BoolStr),
         },
     'phasing': {
         Required('path'): str,
@@ -137,6 +138,7 @@ defaults = {
         'dc width' : 200,
         'zero pad to' : 2048,
         'gaussian power' : 2,
+        'detrend t1': False,
         },
     'phasing': {
         'force': False,
