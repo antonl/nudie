@@ -207,7 +207,7 @@ if __name__ == '__main__':
         raise RuntimeError(s)
 
     try:
-        val = nudie.parse_config(argv[1])['pump probe']
+        val = nudie.parse_config(argv[1], which='pump probe')['pump probe']
         
         run(pp_name=val['jobname'], pp_batch=val['batch'],
                 when=val['when'], plot=val['plot'],

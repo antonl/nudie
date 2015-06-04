@@ -16,7 +16,7 @@ import arrow
 import matplotlib.pyplot as mpl
 
 def run(path, ref_name, ref_batch, dd_name, dd_batch, plot=False,
-        force=False, central_wl=-1, phaselock_wl=-1, stark=False, pad_to=2048):
+        force=False, central_wl=-1, phaselock_wl=-1, stark=False):
     path = Path(path)
 
     # create folder if it doesn't exist
@@ -42,6 +42,7 @@ def run(path, ref_name, ref_batch, dd_name, dd_batch, plot=False,
             nudie.log.error(s)
             raise RuntimeError(s)
 
+        excitation_axis_pad_to = sf.attrs['excitation axis pad to']
         correction_multiplier = np.array(sf['correction multiplier'])
         correction_offset = np.array(sf['correction offset'])
         
@@ -83,9 +84,8 @@ def run(path, ref_name, ref_batch, dd_name, dd_batch, plot=False,
     with h5py.File(str(dd_file), 'a') as sf:
         # create excitation axis
         t1 = sf['axes/t1']
-        pad_to = sf.attrs['nt1']
         dt1 = abs(t1[1] - t1[0])
-        f1 = np.fft.fftshift(np.fft.fftfreq(pad_to, dt1))
+        f1 = np.fft.fftshift(np.fft.fftfreq(excitation_axis_pad_to, dt1))
         
         f1_ax = sf['axes'].require_dataset('raw excitation frequency', 
             shape=f1.shape, dtype=float)
@@ -107,12 +107,12 @@ def run(path, ref_name, ref_batch, dd_name, dd_batch, plot=False,
 
         # zero pad data and flip axes
         if stark:
-            Rw1 = np.fft.fft(R, axis=2, n=pad_to)
-            NRw1 = np.fft.fft(NR, axis=2, n=pad_to)
+            Rw1 = np.fft.fft(R, axis=2, n=excitation_axis_pad_to)
+            NRw1 = np.fft.fft(NR, axis=2, n=excitation_axis_pad_to)
             Sw1 = np.fft.fftshift(0.5*(Rw1[:, :, ::-1] + NRw1), axes=(2,))
         else:
-            Rw1 = np.fft.fft(R, axis=1, n=pad_to)
-            NRw1 = np.fft.fft(NR, axis=1, n=pad_to)
+            Rw1 = np.fft.fft(R, axis=1, n=excitation_axis_pad_to)
+            NRw1 = np.fft.fft(NR, axis=1, n=excitation_axis_pad_to)
             Sw1 = np.fft.fftshift(0.5*(Rw1[:, ::-1] + NRw1), axes=(1,))
 
         phased_Rw1 = correction_multiplier*Rw1 + correction_offset
@@ -187,7 +187,7 @@ if __name__ == '__main__':
         raise RuntimeError(s)
 
     try:
-        val = nudie.parse_config(argv[1])['phasing']
+        val = nudie.parse_config(argv[1], which='phasing')['phasing']
 
         if val['copy'] is False:
             s = '`copy` flag is not set. You should be using the phasing.py ' +\
@@ -204,8 +204,7 @@ if __name__ == '__main__':
                 force=val['force'],
                 phaselock_wl=val['phaselock wl'], 
                 central_wl=val['central wl'],
-                stark=val['stark'],
-                pad_to=val['zero pad to'])
+                stark=val['stark'])
 
     except Exception as e:
         raise e

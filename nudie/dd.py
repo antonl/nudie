@@ -290,7 +290,7 @@ if __name__ == '__main__':
         raise RuntimeError(s)
 
     try:
-        val = nudie.parse_config(argv[1])['2d']
+        val = nudie.parse_config(argv[1], which='2d')['2d']
 
         if val['stark']:
             s = 'the stark flag is set in the configuration. You should be ' +\
@@ -306,7 +306,7 @@ if __name__ == '__main__':
                 pump_chop=val['pump chop'],
                 central_wl=val['central wl'],
                 phaselock_wl=val['phaselock wl'],
-                pad_to=val['zero pad to'],
+                pad_to=val['detection axis zero pad to'],
                 waveforms_per_table=val['waveforms per table'],
                 prd_est=val['probe ref delay'], 
                 lo_width=val['lo width'],
