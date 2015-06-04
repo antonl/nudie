@@ -207,11 +207,16 @@ if __name__ == '__main__':
         raise RuntimeError(s)
 
     try:
-        val = nudie.parse_config(argv[1], which='pump probe')['pump probe']
+        try:
+            val = nudie.parse_config(argv[1], which='pump probe')['pump probe']
+        except ValueError as e:
+            nudie.log.error('could not validate file. Please check ' +\
+                'configuration options.')
+            sys.exit(-1)
         
         run(pp_name=val['jobname'], pp_batch=val['batch'],
                 when=val['when'], plot=val['plot'],
                 wavelengths=val['wavelengths'],
                 exclude=val['exclude'], analysis_path=val['analysis path'])
     except Exception as e:
-        raise e
+        pass

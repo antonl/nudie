@@ -144,15 +144,16 @@ defaults = {
         'force': False,
         'plot' : False,
         'copy': False,
-        'phasing guess': [25, 850, 0],
+        'phasing guess': '25, 850, 0',
         'zero pad to' : 2048,
         'nsteps' : 300,
         'nstep success' : 100,
-        'pixel range to fit': (0, 1340),
+        'pixel range to fit': '0, 1340',
         'excitation axis zero pad to' : 2048,
         'phaselock wl' : 650,
         'central wl' : 650,
         'phasing t2' : 10000,
+        'stark' : False
         },
     }
 
@@ -200,6 +201,7 @@ def parse_config(path, which='all'):
         validated = OrderedDict()
 
         for key, schema in to_validate:
+            log.info('validating section [{!s}]'.format(key))
             validated[key] = schema(cfg[key])
 
         log.debug('final schema is:')

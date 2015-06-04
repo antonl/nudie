@@ -286,7 +286,12 @@ if __name__ == '__main__':
         raise RuntimeError(s)
 
     try:
-        val = nudie.parse_config(argv[1], which='phasing')['phasing']
+        try:
+            val = nudie.parse_config(argv[1], which='phasing')['phasing']
+        except ValueError as e:
+            nudie.log.error('could not validate file. Please check ' +\
+                'configuration options.')
+            sys.exit(-1)
 
         if val['copy'] is True:
             s = '`copy` flag is set. You should be using the apply-phase.py ' +\
@@ -311,4 +316,4 @@ if __name__ == '__main__':
             excitation_axis_zero_pad_to=val['excitation axis zero pad to'])
 
     except Exception as e:
-        raise e
+        pass

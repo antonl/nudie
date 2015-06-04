@@ -39,6 +39,20 @@ def test_parse_config_basic(tmpdir):
 
     nudie.parse_config(p.strpath, which='pump probe')
 
+def test_parse_config_apply_phase(tmpdir):
+    p = tmpdir.join('test_cfg.ini')
+
+    p.write(\
+    '''
+[phasing]
+path        = 15-05-12
+reference name  = d1d2-2d
+reference batch = 0
+2d name    = d1d2-2d
+    ''')
+    with pytest.raises(ValueError):
+        nudie.parse_config(p.strpath, which='phasing')
+
 
 
 

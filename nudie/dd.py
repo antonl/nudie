@@ -290,7 +290,12 @@ if __name__ == '__main__':
         raise RuntimeError(s)
 
     try:
-        val = nudie.parse_config(argv[1], which='2d')['2d']
+        try:
+            val = nudie.parse_config(argv[1], which='2d')['2d']
+        except ValueError as e:
+            nudie.log.error('could not validate file. Please check ' +\
+                'configuration options.')
+            sys.exit(-1)
 
         if val['stark']:
             s = 'the stark flag is set in the configuration. You should be ' +\
@@ -315,4 +320,4 @@ if __name__ == '__main__':
                 analysis_path=val['analysis path'],
                 detrend_t1=val['detrend t1'])
     except Exception as e:
-        raise e
+        pass
