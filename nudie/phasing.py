@@ -121,6 +121,24 @@ def run(path, pp_name, pp_batch, dd_name, dd_batch, plot=False, force=False,
                     'Use the `--force` flag to overwrite.')
                 return
 
+        if excitation_axis_zero_pad_to == -1:
+            pad_to = sf.attrs['nt1']
+        else:
+            pad_to = excitation_axis_zero_pad_to
+
+        # check that the axes I am creating have the right shape
+        stored_pad_to = sf.attrs.get('excitation axis zero pad to', None) 
+
+        # this is pretty ugly
+        if stored_pad_to is None:
+            pass
+        elif stored_pad_to != pad_to:
+            s = 'phasing was attempted before but with a different zero pad ' +\
+                'setting ({:d}). Please rerun raw 2D for this dataset.'.format(
+                        stored_pad_to)
+            nudie.log.error(s)
+            raise RuntimeError(s)
+
         R = sf['raw rephasing']
         NR = sf['raw non-rephasing']
 
@@ -189,11 +207,6 @@ def run(path, pp_name, pp_batch, dd_name, dd_batch, plot=False, force=False,
     with h5py.File(str(dd_file), 'a') as sf:
         # create excitation axis
         t1 = sf['axes/t1']
-        if excitation_axis_pad_to == -1:
-            pad_to = sf.attrs['nt1']
-        else:
-            pad_to = excitation_axis_pad_to
-
 
         dt1 = abs(t1[1] - t1[0])
         f1 = np.fft.fftshift(np.fft.fftfreq(pad_to, dt1))
@@ -295,7 +308,7 @@ if __name__ == '__main__':
             niter_success=val['nstep success'],
             phasing_guess=val['phasing guess'],
             phase_time=val['phasing t2'],
-            excitation_axis_pad_to=val['excitation axis zero pad to'])
+            excitation_axis_zero_pad_to=val['excitation axis zero pad to'])
 
     except Exception as e:
         raise e
