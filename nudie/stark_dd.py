@@ -6,7 +6,7 @@ from __future__ import division, unicode_literals
 import nudie
 import h5py
 import itertools as it
-from scipy.signal import argrelmax, get_window
+from scipy.signal import argrelmax, get_window, detrend
 from scipy.optimize import minimize
 from scipy.io import loadmat
 from pathlib import Path
@@ -51,7 +51,7 @@ def run(dd_name, dd_batch, when='today', wavelengths=None, plot=False,
         central_wl=None, phaselock_wl=None, pad_to=2048,
         waveforms_per_table=40, prd_est=850., lo_width=200, dc_width=200, 
         gaussian_power=2,
-        analysis_path='./analyzed', min_field=0.2):
+        analysis_path='./analyzed', min_field=0.2, detrend_t1=False):
 
     nrepeat = 1 # how many times each waveform is repeated in the camera file. Assumed to be one
     nstark = 2
@@ -259,10 +259,26 @@ def run(dd_name, dd_batch, when='today', wavelengths=None, plot=False,
             sf['raw rephasing'][t2, :, t1_slice] = R 
             sf['raw non-rephasing'][t2, :, t1_slice] = NR 
             sf['raw transient-grating'][t2, :, t1_slice] = TG 
+            nudie.log.debug('Shapes of data:')
+            nudie.log.debug('R: {!s}, NR: {!s}, TG: {!s}'.format(R.shape,
+                NR.shape, TG.shape))
             
         del data, fdata, data_t, avg, rIprobe, rIlo, rEprobe, rEsig
 
     with h5py.File(str(save_path), 'a') as sf:
+        if detrend_t1:
+            R = sf['raw rephasing'][:]
+            NR = sf['raw non-rephasing'][:]
+            TG = sf['raw transient-grating'][:]
+
+            R = detrend(R, axis=2, type='constant')
+            NR = detrend(NR, axis=2, type='constant')
+            TG = detrend(TG, axis=2, type='constant')
+
+            sf['raw rephasing'][:] = R
+            sf['raw non-rephasing'][:] = NR
+            sf['raw transient-grating'][:] = TG
+
         # write out meta data
         sf.attrs['batch_name'] = dd_info['batch_name']
         sf.attrs['batch_no'] = dd_info['batch_no']
@@ -273,7 +289,7 @@ def run(dd_name, dd_batch, when='today', wavelengths=None, plot=False,
         sf.attrs['when'] = dd_info['when']
 
         sf.attrs['probe lo delay estimate'] = prd_est
-        sf.attrs['analysis timestamp'] = arrow.now().format('DD-MM-YYYY HH:mm')
+        sf.attrs['analysis timestamp'] = arrow.now().format('MM-DD-YYYY HH:mm')
         sf.attrs['nudie version'] = nudie.version 
         
         # write out axes
@@ -339,6 +355,7 @@ if __name__ == '__main__':
                 dc_width=val['dc width'],
                 gaussian_power=val['gaussian power'],
                 analysis_path=val['analysis path'],
-                min_field=val['field on threshold'])
+                min_field=val['field on threshold'],
+                detrend_t1=val['detrend t1'])
     except Exception as e:
         raise e

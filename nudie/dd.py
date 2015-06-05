@@ -12,6 +12,7 @@ from pathlib import Path
 from collections import deque
 import numpy as np
 import arrow
+from scipy.signal import detrend
 
 def load_wavelengths(path):
     '''load a pre-calibrated wavengths file generated with the
@@ -47,7 +48,8 @@ def run(dd_name, dd_batch, when='today', wavelengths=None, plot=False,
         central_wl=None, phaselock_wl=None, pad_to=2048,
         waveforms_per_table=40, prd_est=850., lo_width=200, dc_width=200,
         gaussian_power=2.,
-        analysis_path='./analyzed'):
+        analysis_path='./analyzed',
+        detrend_t1=False):
 
     if plot:
         import matplotlib as mpl
@@ -225,6 +227,19 @@ def run(dd_name, dd_batch, when='today', wavelengths=None, plot=False,
         del data, fdata, data_t, avg, rIprobe, rIlo, rEprobe, rEsig
 
     with h5py.File(str(save_path), 'a') as sf:
+        if detrend_t1:
+            R = sf['raw rephasing'][:]
+            NR = sf['raw non-rephasing'][:]
+            TG = sf['raw transient-grating'][:]
+
+            R = detrend(R, axis=1, type='constant')
+            NR = detrend(NR, axis=1, type='constant')
+            TG = detrend(TG, axis=1, type='constant')
+
+            sf['raw rephasing'][:] = R
+            sf['raw non-rephasing'][:] = NR
+            sf['raw transient-grating'][:] = TG
+
         # write out meta data
         sf.attrs['batch_name'] = dd_info['batch_name']
         sf.attrs['batch_no'] = dd_info['batch_no']
@@ -297,6 +312,7 @@ if __name__ == '__main__':
                 lo_width=val['lo width'],
                 dc_width=val['dc width'],
                 gaussian_power=val['gaussian power'],
-                analysis_path=val['analysis path'])
+                analysis_path=val['analysis path'],
+                detrend_t1=val['detrend t1'])
     except Exception as e:
         raise e
