@@ -67,56 +67,56 @@ def as_dict(config):
 
 # Optional and Required are a little interchangable because I pass default
 # parameters anyway
-schema = Schema({
-  'pump probe': {
-        Required('jobname'): str,
-        Required('batch'): Coerce(int),
-        Required('when'): str, # probably should validate to a valid date
-        Required('wavelengths'): str,
-        Required('analysis path'): str,
-        Optional('plot'): Coerce(BoolStr),
-        Optional('exclude'): Coerce(IntList),
-        },
-  '2d': {
-        Required('jobname'): str,
-        Required('batch'): Coerce(int),
-        Required('when'): str, # probably should validate to a valid date
-        Required('wavelengths'): str,
-        Required('analysis path'): str,
-        Optional('waveforms per table'): Coerce(int),
-        Optional('central wl'): Coerce(float),
-        Optional('phaselock wl'): Coerce(float),
-        Optional('plot'): Coerce(BoolStr),
-        Optional('force'): Coerce(BoolStr),
-        Optional('stark'): Coerce(BoolStr),
-        Optional('field on threshold'): Coerce(float),
-        Optional('probe ref delay'): Coerce(float), 
-        Optional('lo width'): Coerce(float),
-        Optional('dc width'): Coerce(float),
-        Optional('zero pad to'): Coerce(int),
-        Optional('gaussian power'): Coerce(float),
-        Optional('pump chop'): Coerce(BoolStr),
-        Optional('detrend t1'): Coerce(BoolStr),
-        },
-    'phasing': {
-        Required('path'): str,
-        Required('reference name'): str,
-        Required('reference batch'): Coerce(int),
-        Required('2d name'): str,
-        Required('2d batch'): Coerce(int),
-        Optional('copy'): Coerce(BoolStr),
-        Optional('phasing guess'): Coerce(FloatList),
-        Optional('zero pad to'): Coerce(int),
-        Optional('nsteps'): Coerce(int),
-        Optional('nstep success'): Coerce(int),
-        Optional('pixel range to fit'): Coerce(IntList), # check that lb < ub
-        Optional('force'): Coerce(BoolStr),
-        Optional('plot'): Coerce(BoolStr),
-        Optional('stark'): Coerce(BoolStr),
-        Optional('phaselock wl'): Coerce(float),
-        Optional('central wl'): Coerce(float),
-        Optional('phasing t2'): Coerce(float),
-        },
+schema_pp = Schema({
+    Required('jobname'): str,
+    Required('batch'): Coerce(int),
+    Required('when'): str, # probably should validate to a valid date
+    Required('wavelengths'): str,
+    Required('analysis path'): str,
+    Optional('plot'): Coerce(BoolStr),
+    Optional('exclude'): Coerce(IntList),
+    }, extra=REMOVE_EXTRA)
+
+schema_2d = Schema({
+    Required('jobname'): str,
+    Required('batch'): Coerce(int),
+    Required('when'): str, # probably should validate to a valid date
+    Required('wavelengths'): str,
+    Required('analysis path'): str,
+    Optional('waveforms per table'): Coerce(int),
+    Optional('central wl'): Coerce(float),
+    Optional('phaselock wl'): Coerce(float),
+    Optional('plot'): Coerce(BoolStr),
+    Optional('force'): Coerce(BoolStr),
+    Optional('stark'): Coerce(BoolStr),
+    Optional('field on threshold'): Coerce(float),
+    Optional('probe ref delay'): Coerce(float), 
+    Optional('lo width'): Coerce(float),
+    Optional('dc width'): Coerce(float),
+    Optional('detection axis zero pad to'): Coerce(int),
+    Optional('gaussian power'): Coerce(float),
+    Optional('pump chop'): Coerce(BoolStr),
+    Optional('detrend t1'): Coerce(BoolStr),
+    }, extra=REMOVE_EXTRA)
+
+schema_phasing = Schema({
+    Required('path'): str,
+    Required('reference name'): str,
+    Required('reference batch'): Coerce(int),
+    Required('2d name'): str,
+    Required('2d batch'): Coerce(int),
+    Optional('copy'): Coerce(BoolStr),
+    Optional('phasing guess'): Coerce(FloatList),
+    Optional('excitation axis zero pad to'): Coerce(int),
+    Optional('nsteps'): Coerce(int),
+    Optional('nstep success'): Coerce(int),
+    Optional('pixel range to fit'): Coerce(IntList), # check that lb < ub
+    Optional('force'): Coerce(BoolStr),
+    Optional('plot'): Coerce(BoolStr),
+    Optional('stark'): Coerce(BoolStr),
+    Optional('phaselock wl'): Coerce(float),
+    Optional('central wl'): Coerce(float),
+    Optional('phasing t2'): Coerce(float),
     }, extra=REMOVE_EXTRA)
 
 defaults = {
@@ -136,7 +136,7 @@ defaults = {
         'probe ref delay' : 850.,
         'lo width' : 200,
         'dc width' : 200,
-        'zero pad to' : 2048,
+        'detection axis zero pad to' : 2048,
         'gaussian power' : 2,
         'detrend t1': False,
         },
@@ -144,22 +144,36 @@ defaults = {
         'force': False,
         'plot' : False,
         'copy': False,
-        'phasing guess': [25, 850, 0],
+        'phasing guess': '25, 850, 0',
         'zero pad to' : 2048,
         'nsteps' : 300,
         'nstep success' : 100,
-        'pixel range to fit': (0, 1340),
-        'zero pad to' : 128,
+        'pixel range to fit': '0, 1340',
+        'excitation axis zero pad to' : 2048,
         'phaselock wl' : 650,
         'central wl' : 650,
         'phasing t2' : 10000,
+        'stark' : False
         },
     }
 
-def parse_config(path):
+def parse_config(path, which='all'):
     path = Path(path)
     log.debug('parse_config got `{!s}` as input file'.format(path))
-    
+
+    schemas = {'2d': schema_2d, 'pump probe': schema_pp, 'phasing':
+            schema_phasing}
+
+    if which == 'all':
+        to_validate = schemas.items()
+    else:
+        try:
+            to_validate = [(which, schemas[which])]
+        except KeyError:
+            s = 'schema `{!s}` does not exist.'.format(which)
+            log.error(s)
+            raise ValueError(s)
+
     if not path.is_file():
         s = '`{!s}` does not exist!'.format(path)
         log.error(s)
@@ -183,7 +197,12 @@ def parse_config(path):
                 log.debug('    {!s}: {!s}'.format(subsec, subval))
 
         log.debug('validating to schema')
-        validated = schema(as_dict(cfg))
+        cfg = as_dict(cfg) 
+        validated = OrderedDict()
+
+        for key, schema in to_validate:
+            log.info('validating section [{!s}]'.format(key))
+            validated[key] = schema(cfg[key])
 
         log.debug('final schema is:')
         for sec, val in validated.items():
@@ -194,10 +213,10 @@ def parse_config(path):
         s = 'error while parsing file `{!s}`'.format(path)
         log.error(s)
         log.error(e)
-        raise RuntimeError(s)
+        raise ValueError(s)
     except voluptuous.MultipleInvalid as e:
+        s = 'error while validating file `{!s}`:'.format(path)
         log.error(e)
-        raise RuntimeError(s)
+        raise ValueError(s)
 
     return validated
-

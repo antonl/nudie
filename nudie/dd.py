@@ -290,7 +290,12 @@ if __name__ == '__main__':
         raise RuntimeError(s)
 
     try:
-        val = nudie.parse_config(argv[1])['2d']
+        try:
+            val = nudie.parse_config(argv[1], which='2d')['2d']
+        except ValueError as e:
+            nudie.log.error('could not validate file. Please check ' +\
+                'configuration options.')
+            sys.exit(-1)
 
         if val['stark']:
             s = 'the stark flag is set in the configuration. You should be ' +\
@@ -306,7 +311,7 @@ if __name__ == '__main__':
                 pump_chop=val['pump chop'],
                 central_wl=val['central wl'],
                 phaselock_wl=val['phaselock wl'],
-                pad_to=val['zero pad to'],
+                pad_to=val['detection axis zero pad to'],
                 waveforms_per_table=val['waveforms per table'],
                 prd_est=val['probe ref delay'], 
                 lo_width=val['lo width'],
@@ -315,4 +320,4 @@ if __name__ == '__main__':
                 analysis_path=val['analysis path'],
                 detrend_t1=val['detrend t1'])
     except Exception as e:
-        raise e
+        pass

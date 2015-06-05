@@ -92,8 +92,8 @@ def plot_phased_2d(f1, f2, t2, dd):
 
 def run(path, pp_name, pp_batch, dd_name, dd_batch, plot=False, force=False,
         limits=None, phaselock_wl=650, central_wl=650, nsteps=300,
-        niter_success=100, phasing_guess=[25, 850, 0], pad_to=128,
-        phase_time=10000):
+        niter_success=100, phasing_guess=[25, 850, 0], 
+        excitation_axis_zero_pad_to=-1, phase_time=10000):
     
     path = Path(path)
 
@@ -120,6 +120,24 @@ def run(path, pp_name, pp_batch, dd_name, dd_batch, plot=False, force=False,
                 nudie.log.warning('Dataset already has a phasing correction. ' +\
                     'Use the `--force` flag to overwrite.')
                 return
+
+        if excitation_axis_zero_pad_to == -1:
+            pad_to = sf.attrs['nt1']
+        else:
+            pad_to = excitation_axis_zero_pad_to
+
+        # check that the axes I am creating have the right shape
+        stored_pad_to = sf.attrs.get('excitation axis zero pad to', None) 
+
+        # this is pretty ugly
+        if stored_pad_to is None:
+            pass
+        elif stored_pad_to != pad_to:
+            s = 'phasing was attempted before but with a different zero pad ' +\
+                'setting ({:d}). Please rerun raw 2D for this dataset.'.format(
+                        stored_pad_to)
+            nudie.log.error(s)
+            raise RuntimeError(s)
 
         R = sf['raw rephasing']
         NR = sf['raw non-rephasing']
@@ -189,7 +207,7 @@ def run(path, pp_name, pp_batch, dd_name, dd_batch, plot=False, force=False,
     with h5py.File(str(dd_file), 'a') as sf:
         # create excitation axis
         t1 = sf['axes/t1']
-        pad_to = sf.attrs['nt1']
+
         dt1 = abs(t1[1] - t1[0])
         f1 = np.fft.fftshift(np.fft.fftfreq(pad_to, dt1))
         
@@ -230,6 +248,8 @@ def run(path, pp_name, pp_batch, dd_name, dd_batch, plot=False, force=False,
 
         sf.attrs['phase lock wavelength'] = phaselock_wl 
         sf.attrs['central wavelength'] = central_wl 
+        sf.attrs['excitation axis zero pad to'] = pad_to
+
         # attach dimension scales
         r.dims.create_scale(f1_ax, 'raw excitation frequency')
         r.dims.create_scale(f1_ax_pl, 'phase-locked excitation frequency')
@@ -266,7 +286,12 @@ if __name__ == '__main__':
         raise RuntimeError(s)
 
     try:
-        val = nudie.parse_config(argv[1])['phasing']
+        try:
+            val = nudie.parse_config(argv[1], which='phasing')['phasing']
+        except ValueError as e:
+            nudie.log.error('could not validate file. Please check ' +\
+                'configuration options.')
+            sys.exit(-1)
 
         if val['copy'] is True:
             s = '`copy` flag is set. You should be using the apply-phase.py ' +\
@@ -287,7 +312,8 @@ if __name__ == '__main__':
             nsteps=val['nsteps'],
             niter_success=val['nstep success'],
             phasing_guess=val['phasing guess'],
-            phase_time=val['phasing t2'])
+            phase_time=val['phasing t2'],
+            excitation_axis_zero_pad_to=val['excitation axis zero pad to'])
 
     except Exception as e:
-        raise e
+        pass
