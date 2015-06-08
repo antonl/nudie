@@ -5,14 +5,16 @@ rcParams['figure.figsize'] = (14, 10)
 import numpy.ma as ma
 from pathlib import Path
 
-file_to_open = '15-06-05/Bchla-2d-batch01.h5'
-save_folder = '15-06-05/figures'
+file_to_open = '15-06-08/IR144-2d-scan-batch00.h5'
+save_folder = '15-06-08/figures'
 
 nlevels = 50
-levels_threshold = 0.5
+levels_threshold = 0.
 
-pump_axis_limits = 0.335, 0.435
-probe_axis_limits = 0.335, 0.435
+pump_axis_limits = 0.35, 0.435
+probe_axis_limits = 0.35, 0.435 
+
+which = 10
 
 def shiftedColorMap(cmap, start=0, midpoint=0.5, stop=1.0, name='shiftedcmap'):
     '''
@@ -80,42 +82,51 @@ with h5py.File(file_to_open, 'r') as sf:
     f3_slice = slice(np.argmin(np.abs(f3 - probe_axis_limits[0])),
             np.argmin(np.abs(f3 - probe_axis_limits[1])))
     
-    res = np.rot90(np.real(dd[0]), -1)
     f1 = f1[f1_slice]
     f3 = f3[f3_slice]
-    res = res[f3_slice, f1_slice]
-    
-    #res = ma.masked_where(abs(res) < 0.25, res, copy=False)
-    vmax, vmin = ma.max(res), ma.min(res)
-    ticker = mpl.ticker.MaxNLocator(nlevels)
-    levels = ticker.tick_values(vmin, vmax)
-    levels = levels[np.abs(levels) > levels_threshold] 
-    
-    midpoint = 1-vmax/(vmax+abs(vmin))
-    cmap = shiftedColorMap(mpl.cm.RdBu_r, midpoint=midpoint)
-    
-    ca = contour(f1, f3, res, levels=levels, colors='k')
-    cb = contourf(f1, f3, res, levels=levels, cmap=cmap)
-    
-    ylabel(dd.dims[2].label)
-    xlabel(dd.dims[1].label)    
-    
-    gca().add_line(Line2D([0, 1], [0, 1], linewidth=1.5, color='k'))
 
-    colorbar()
-    gca().set_aspect('equal', 'datalim')
-    tight_layout()
-    text(0.05, 0.95, "T = {:3.0f}fs".format(np.abs(t2[0])), 
-            transform=gca().transAxes, fontsize=20, verticalalignment='top')
+    fig = figure()
 
-    text_str = "Phased: {:s}\nnudie version: {:s}".format(
-        sf.attrs['phasing timestamp'],
-        sf.attrs['nudie version'])                 
-    props = dict(boxstyle='round', facecolor='white', alpha=0.5)
-    text(0.99, 0.01, text_str, transform=gca().transAxes, 
-            fontsize=14, verticalalignment='bottom', horizontalalignment='right', 
-            bbox=props)
+    for i,T in enumerate(t2):
+        res = np.rot90(np.real(dd[i]), -1)
+        res = res[f3_slice, f1_slice]
+        
+        #res = ma.masked_where(abs(res) < 0.25, res, copy=False)
+        vmax, vmin = ma.max(res), ma.min(res)
+        ticker = mpl.ticker.MaxNLocator(nlevels)
+        levels = ticker.tick_values(vmin, vmax)
+        levels = levels[np.abs(levels) > levels_threshold] 
+        
+        midpoint = 1-vmax/(vmax+abs(vmin))
+        cmap = shiftedColorMap(mpl.cm.RdBu_r, midpoint=midpoint)
+        
+        ca = contour(f1, f3, res, levels=levels, colors='k')
+        cb = contourf(f1, f3, res, levels=levels, cmap=cmap)
+        
+        ylabel(dd.dims[2].label)
+        xlabel(dd.dims[1].label)    
+        
+        gca().add_line(Line2D([0, 1], [0, 1], linewidth=1.5, color='k'))
 
-    savefig(str(save_folder / sf.attrs['batch_name']) + '.png', format='png',
-            dpi=600)
-    show()
+        colorbar()
+        gca().set_aspect('equal', 'datalim')
+        tight_layout()
+        text(0.05, 0.95, "T = {:3.0f}fs".format(np.abs(T)), 
+                transform=gca().transAxes, fontsize=20, verticalalignment='top')
+
+        text_str = "Phased: {:s}\nnudie version: {:s}".format(
+            sf.attrs['phasing timestamp'],
+            sf.attrs['nudie version'])                 
+        props = dict(boxstyle='round', facecolor='white', alpha=0.5)
+        text(0.99, 0.01, text_str, transform=gca().transAxes, 
+                fontsize=14, verticalalignment='bottom', horizontalalignment='right', 
+                bbox=props)
+
+        savefig(str(save_folder / sf.attrs['batch_name']) +
+                '-{:3.0f}fs.png'.format(abs(T)), format='png',
+                dpi=600)
+
+        print("Saved 2D @ {:3.0f} fs".format(abs(T)))
+        if i == which:
+            show()
+        fig.clf()

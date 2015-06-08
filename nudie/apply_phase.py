@@ -16,7 +16,7 @@ import arrow
 import matplotlib.pyplot as mpl
 
 def run(path, ref_name, ref_batch, dd_name, dd_batch, plot=False,
-        force=False, central_wl=-1, phaselock_wl=-1, stark=False):
+        force=False, stark=False):
     path = Path(path)
 
     # create folder if it doesn't exist
@@ -36,13 +36,15 @@ def run(path, ref_name, ref_batch, dd_name, dd_batch, plot=False,
 
     # load phased data
     with h5py.File(str(ref_file), 'r') as sf:
-        if sf.attrs['phased'] != True:
+        if sf.attrs.get('phased', False) == False:
             s = 'phasing dataset does not contain a phasing correction. ' +\
                 'Cannot reuse it for phasing!'
             nudie.log.error(s)
             raise RuntimeError(s)
 
-        excitation_axis_pad_to = sf.attrs['excitation axis pad to']
+        phaselock_wl = sf.attrs['phase lock wavelength'] 
+        central_wl = sf.attrs['central wavelength'] 
+        excitation_axis_pad_to = sf.attrs['excitation axis zero pad to']
         correction_multiplier = np.array(sf['correction multiplier'])
         correction_offset = np.array(sf['correction offset'])
         
@@ -207,8 +209,6 @@ if __name__ == '__main__':
                 val['2d batch'], 
                 plot=val['plot'], 
                 force=val['force'],
-                phaselock_wl=val['phaselock wl'], 
-                central_wl=val['central wl'],
                 stark=val['stark'])
     except Exception as e:
         raise e
