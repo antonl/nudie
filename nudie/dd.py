@@ -13,6 +13,7 @@ from collections import deque
 import numpy as np
 import arrow
 from scipy.signal import detrend
+import numpy.ma as ma
 
 def load_wavelengths(path):
     '''load a pre-calibrated wavengths file generated with the
@@ -56,7 +57,6 @@ def run(dd_name, dd_batch, when='today', wavelengths=None, plot=False,
         import matplotlib.pyplot as plt
         mpl.rcParams['figure.figsize'] = (16,12)
         mpl.use('Qt4Agg')
-        plt.ioff()
 
     nrepeat = 1 # how many times each waveform is repeated in the camera file. Assumed to be one
     npixels = 1340
@@ -183,6 +183,10 @@ def run(dd_name, dd_batch, when='today', wavelengths=None, plot=False,
         rIlo = np.fft.ifft(fdata*lo_window, axis=1)[:, :npixels]
         
         if pump_chop:
+            nudie.log.warning('pump chopping code is not well tested and will' +\
+                    ' probably result in wrong values!')
+            nudie.log.warning('It currently doesn\'t mask invalid reference ' +\
+                    'values')
             # Pump chop before division
             rEsig = np.zeros_like(rIlo)
             for t1, k in it.product(range(waveforms_per_table), phase_cycles[:-1]):
@@ -195,7 +199,8 @@ def run(dd_name, dd_batch, when='today', wavelengths=None, plot=False,
                 rEsig[phase_idx, :] = -(rIlo[phase_idx, :] - rIlo[chop_idx, :])/rEprobe
         else:
             rEprobe = np.sqrt(np.abs(rIprobe))
-            rEsig = rIlo/rEprobe
+            masked_probe = ma.masked_less(rEprobe, 1e-7*rEprobe.max())
+            rEsig = ma.filled(rIlo/masked_probe, fill_value=0)
         
         # average each phase together
         if pump_chop:
@@ -215,6 +220,7 @@ def run(dd_name, dd_batch, when='today', wavelengths=None, plot=False,
         if all([plot, table==0, t2==0]):
             phasing_tg = 0.5*(R[0] + NR[0])
             plot_phasing_tg(f, phasing_tg)
+            #plot_phasing_tg(f, masked_probe)
         
         with h5py.File(str(save_path), 'a') as sf:
             # save data at current t2

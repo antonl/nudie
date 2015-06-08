@@ -316,4 +316,4 @@ if __name__ == '__main__':
             excitation_axis_zero_pad_to=val['excitation axis zero pad to'])
 
     except Exception as e:
-        pass
+        print(e)

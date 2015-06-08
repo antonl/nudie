@@ -14,17 +14,10 @@ from scipy.io import loadmat
 from pathlib import Path
 from collections import deque
 import numpy as np
+import numpy.ma as ma
 import arrow
 import matplotlib.pylab as mpl
-import pdb
 
-def make_parser():
-    parser = argparse.ArgumentParser(
-        description='Analyze a single pump-probe dataset and output a hdf5 ' +\
-                'file with the analysis.')
-    parser.add_argument('config', type=str, action='store', 
-        help='configuration file for running the analysis')
-    return parser
 
 def load_wavelengths(path):
     '''load a pre-calibrated wavengths file generated with the
@@ -136,8 +129,10 @@ def run(pp_name, pp_batch, when='today', wavelengths=None, plot=False,
 
         # FIXME: unsure about the proper signs for C3!
         C3 = (0.25*zero + 0.25*none1 + 0.25*pipi + 0.25*none2)
-        S3 = np.mean((0.5*A3 + 0.5*B3)/np.sqrt(C3), axis=1)
-        pp = S3/np.max(S3)
+        C3 = ma.masked_less(C3, 1e-7*C3.max())
+        
+        S3 = np.mean((0.5*A3 + 0.5*B3)/ma.sqrt(C3), axis=1)
+        pp = ma.filled(S3/np.max(S3), fill_value=0)
         
         with h5py.File(str(save_path), mode='a') as sf:
             loop_idx = np.argmin(np.abs(loops - loop))
