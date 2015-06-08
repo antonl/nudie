@@ -211,4 +211,4 @@ if __name__ == '__main__':
                 force=val['force'],
                 stark=val['stark'])
     except Exception as e:
-        raise e
+        nudie.log.exception(e)

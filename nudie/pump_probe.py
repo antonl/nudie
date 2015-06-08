@@ -214,4 +214,4 @@ if __name__ == '__main__':
                 wavelengths=val['wavelengths'],
                 exclude=val['exclude'], analysis_path=val['analysis path'])
     except Exception as e:
-        pass
+        nudie.log.exception(e)

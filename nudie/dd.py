@@ -130,7 +130,7 @@ def run(dd_name, dd_batch, when='today', wavelengths=None, plot=False,
             dd_info['table_range']):
 
         if loop != 0:
-            raise NotImplemented('Code is not setup to handle multiple loops')
+            raise NotImplementedError('Code is not setup to handle multiple loops')
 
         # first file requires special synchronization
         # this is the rule that determines that it is the first file
@@ -327,4 +327,4 @@ if __name__ == '__main__':
                 analysis_path=val['analysis path'],
                 detrend_t1=val['detrend t1'])
     except Exception as e:
-        pass
+        nudie.log.exception(e)

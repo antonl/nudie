@@ -314,6 +314,5 @@ if __name__ == '__main__':
             phasing_guess=val['phasing guess'],
             phase_time=val['phasing t2'],
             excitation_axis_zero_pad_to=val['excitation axis zero pad to'])
-
     except Exception as e:
-        print(e)
+        nudie.log.exception(e)
