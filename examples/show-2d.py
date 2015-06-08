@@ -1,9 +1,13 @@
+import nudie
 from matplotlib.pylab import *
 import h5py
-rcParams['figure.figsize'] = (16, 8)
+rcParams['figure.figsize'] = (14, 10)
 import numpy.ma as ma
+from pathlib import Path
 
 file_to_open = '15-06-05/Bchla-2d-batch01.h5'
+save_folder = '15-06-05/figures'
+
 nlevels = 50
 levels_threshold = 0.5
 
@@ -61,6 +65,10 @@ def shiftedColorMap(cmap, start=0, midpoint=0.5, stop=1.0, name='shiftedcmap'):
 
     return newcmap
 
+save_folder = Path(save_folder)
+if not save_folder.exists():
+    save_folder.mkdir(parents=True)
+
 with h5py.File(file_to_open, 'r') as sf:
     dd = sf['phased 2D']
     f1 = np.array(dd.dims[1][1]) # excitation freq
@@ -93,15 +101,21 @@ with h5py.File(file_to_open, 'r') as sf:
     xlabel(dd.dims[1].label)    
     
     gca().add_line(Line2D([0, 1], [0, 1], linewidth=1.5, color='k'))
-    #plot([0.33, 0.42], [0.33, 0.42], linewidth=3, linestyle='-', color='b')    
 
     colorbar()
+    gca().set_aspect('equal', 'datalim')
+    tight_layout()
+    text(0.05, 0.95, "T = {:3.0f}fs".format(np.abs(t2[0])), 
+            transform=gca().transAxes, fontsize=20, verticalalignment='top')
+
     text_str = "Phased: {:s}\nnudie version: {:s}".format(
         sf.attrs['phasing timestamp'],
         sf.attrs['nudie version'])                 
     props = dict(boxstyle='round', facecolor='white', alpha=0.5)
-    text(0.99, 0.01, text_str, transform=gca().transAxes, fontsize=14, verticalalignment='bottom', horizontalalignment='right', bbox=props)
-    text(0.05, 0.95, "T = {:3.0f}fs".format(np.abs(t2[0])), transform=gca().transAxes, fontsize=20, verticalalignment='top')
-    gca().set_aspect('equal', 'datalim')
+    text(0.99, 0.01, text_str, transform=gca().transAxes, 
+            fontsize=14, verticalalignment='bottom', horizontalalignment='right', 
+            bbox=props)
 
-show()
+    savefig(str(save_folder / sf.attrs['batch_name']) + '.png', format='png',
+            dpi=600)
+    show()
