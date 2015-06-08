@@ -255,6 +255,7 @@ def run(dd_name, dd_batch, when='today', wavelengths=None, plot=False,
         sf.attrs['nt2'] = dd_info['nt2']
         sf.attrs['when'] = dd_info['when']
 
+        sf.attrs['detection axis pad to'] = pad_to
         sf.attrs['probe lo delay estimate'] = prd_est
         sf.attrs['analysis timestamp'] = arrow.now().format('DD-MM-YYYY HH:mm')
         sf.attrs['nudie version'] = nudie.version
