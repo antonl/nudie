@@ -1,7 +1,16 @@
 from setuptools import setup, find_packages
+import re
+import ast
+
+_version_re = re.compile(r'version\s+=\s+(.*)')
+
+with open('nudie/version.py', 'rb') as f:
+    version = str(ast.literal_eval(_version_re.search(
+        f.read().decode('utf-8')).group(1)))
+
 setup(
     name = "nudiepy",
-    version = "0.1",
+    version = version,
     packages = find_packages(),
     #scripts = ['say_hello.py'],
 
