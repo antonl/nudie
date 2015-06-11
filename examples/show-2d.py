@@ -10,11 +10,10 @@ save_folder = '15-06-08/figures'
 
 nlevels = 50
 levels_threshold = 0.
+dpi = 150
 
-pump_axis_limits = 0.35, 0.435
+pump_axis_limits = 0., 1.
 probe_axis_limits = 0.35, 0.435 
-
-which = 10
 
 def shiftedColorMap(cmap, start=0, midpoint=0.5, stop=1.0, name='shiftedcmap'):
     '''
@@ -123,10 +122,8 @@ with h5py.File(file_to_open, 'r') as sf:
                 bbox=props)
 
         savefig(str(save_folder / sf.attrs['batch_name']) +
-                '-{:3.0f}fs.png'.format(abs(T)), format='png',
-                dpi=600)
+                '-{:4.0f}fs.png'.format(abs(T)), format='png',
+                dpi=dpi)
 
         print("Saved 2D @ {:3.0f} fs".format(abs(T)))
-        if i == which:
-            show()
         fig.clf()
