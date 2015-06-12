@@ -13,16 +13,45 @@ from pathlib import Path
 from collections import deque
 import numpy as np
 import arrow
-import matplotlib.pyplot as mpl
+import matplotlib.pylab as mpl
 import sys
 import pdb
 
 def plot_phased_tg(t2, f3, tg, stark=False):
-    mpl.contour(-t2, f3, np.real(tg).T)
+    from nudie.utils.plotting import shiftedColorMap
+    res = np.real(tg).T
+
+    nlevels = 50
+    vmax, vmin = np.max(res), np.min(res)
+    ticker = mpl.mpl.ticker.MaxNLocator(nlevels)
+    levels = ticker.tick_values(vmin, vmax)
+    #levels = levels[np.abs(levels) > levels_threshold] 
+    xsection = res[800, :]
+
+    midpoint = 1-vmax/(vmax+abs(vmin))
+    cmap = shiftedColorMap(mpl.cm.RdBu_r, midpoint=midpoint)
+        
+    fig = mpl.figure()
+    gs = mpl.GridSpec(2,2, height_ratios=[2,1], width_ratios=[5, 0.1]) 
+    ax1 = fig.add_subplot(gs[0, 0])
+    ax2 = fig.add_subplot(gs[1, 0])
+    ax3 = fig.add_subplot(gs[:, 1])
+
+    ax1.contour(-t2, f3, res, 10, colors='k')
+    cf = ax1.contourf(-t2, f3, res, levels=levels, cmap=cmap)
+        
+    ax1.set_ylabel('detection frequency')
+    ax1.set_xlabel('t2 time')            
+    mpl.colorbar(cf, cax=ax3, use_gridspec=True)
+
+    ax2.plot(-t2, xsection)
+    ax2.grid()
+
+    gs.tight_layout(fig)
     mpl.show()
 
 def apply_phase_tg(tg_file, correction_multiplier, correction_offset, **kwargs):
-    nudie.log.info('apply_phase_tg got kwargs: {!s}'.format(kwargs))
+    nudie.log.debug('apply_phase_tg got kwargs: {!s}'.format(kwargs))
 
     # unpack needed kwargs
     force = kwargs.get('force', False)
@@ -75,10 +104,12 @@ def apply_phase_tg(tg_file, correction_multiplier, correction_offset, **kwargs):
                 x.dims[1].attach_scale(sf['axes/detection frequency'])
 
         if plot:
+            t2_ax = sf['axes/t2'][:]
+            f3_ax = sf['axes/detection frequency'][:]
             if stark:
-                plot_phased_tg(t2_ax, f3_ax, tg, stark=True)
+                plot_phased_tg(t2_ax, f3_ax, phased_TG, stark=True)
             else:
-                plot_phased_tg(t2_ax, f3_ax, tg)
+                plot_phased_tg(t2_ax, f3_ax, phased_TG)
 
 def apply_phase_2d(dd_file, correction_multiplier, correction_offset, **kwargs):
     nudie.log.debug('apply_phase_2d got kwargs: {!s}'.format(kwargs))
