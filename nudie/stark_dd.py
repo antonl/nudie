@@ -326,7 +326,7 @@ def main(config, verbosity=nudie.logging.INFO):
     nudie.show_errors(verbosity)
 
     try:
-        val = nudie.parse_config(config)['2d']
+        val = nudie.parse_config(config, which='2d')['2d']
 
         if val['stark'] != True:
             s = 'this is not a stark dataset according to the config file. ' +\
