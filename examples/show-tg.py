@@ -4,16 +4,17 @@ import h5py
 rcParams['figure.figsize'] = (14, 10)
 from pathlib import Path
 
-file_to_open = '15-04-10/r800-tg-batch00.h5'
+file_to_open = '15-03-23/M250V_TB_Asc_DOPA_TG_77K_100ps-batch00.h5'
 save_folder = '15-05-07/figures'
 
 nlevels = 50
-levels_threshold = 0.
+levels_threshold = -50
 dpi = 150
 
-probe_axis_limits = 0., 1
+#probe_axis_limits = 0.330, 0.42 
+probe_axis_limits = 0, 1
 
-xsection_wavelength = 680
+xsection_wavelength = 800
 
 save_folder = Path(save_folder)
 
@@ -83,7 +84,9 @@ with h5py.File(file_to_open, 'r') as sf:
     
     f3 = f3[f3_slice]
 
-    res = np.rot90(np.abs(tg), -1)
+    
+    res = np.abs(tg).T
+    #res = np.rot90(np.abs(tg), -1)
     xsection = res[idx, :]
     res = res[f3_slice, :]
         
@@ -101,8 +104,8 @@ with h5py.File(file_to_open, 'r') as sf:
     ax2 = fig.add_subplot(gs[1, 0])
     ax3 = fig.add_subplot(gs[:, 1])
 
-    ax1.contour(t2, f3, res, 10, colors='k')
-    cf = ax1.contourf(t2, f3, res, levels=levels, cmap=cmap)
+    ax1.contour(-t2, f3, res, 10, colors='k')
+    cf = ax1.contourf(-t2, f3, res, levels=levels, cmap=cmap)
         
     ax1.set_ylabel(tg.dims[1].label)
     ax1.set_xlabel(tg.dims[0].label)            
@@ -117,7 +120,7 @@ with h5py.File(file_to_open, 'r') as sf:
         fontsize=14, verticalalignment='top', horizontalalignment='left', 
         bbox=props)
 
-    ax2.plot(t2, xsection)
+    ax2.plot(-t2, xsection)
     ax2.grid()
     gs.tight_layout(fig)
     show()

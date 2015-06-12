@@ -159,6 +159,20 @@ def run(tg_name, tg_batch, when='today', wavelengths=None, plot=False,
         
         rEprobe = np.sqrt(np.abs(rIprobe))
 
+        '''
+        tag_none1 = tags[0][0]['none1']['shutter open']
+        nnone1 = rEprobe[tag_none1].mean(axis=0)
+        none1 = rIlo[tag_none1].mean(axis=0)
+        tag_zero = tags[0][0]['zero']['shutter open']
+        nzero = rEprobe[tag_zero].mean(axis=0)
+        zero = rIlo[tag_zero].mean(axis=0)
+        tag_none2 = tags[0][0]['none2']['shutter open']
+        nnone2 = rEprobe[tag_none2].mean(axis=0)
+        none2 = rIlo[tag_none2].mean(axis=0)
+        tag_pipi = tags[0][0]['pipi']['shutter open']
+        npipi = rEprobe[tag_pipi].mean(axis=0)
+        pipi = rIlo[tag_pipi].mean(axis=0)
+        '''
         tag_none1 = tags[0][0]['none1']['shutter open']
         nnone1 = rEprobe[tag_none1]
         none1 = rIlo[tag_none1]
@@ -172,12 +186,15 @@ def run(tg_name, tg_batch, when='today', wavelengths=None, plot=False,
         npipi = rEprobe[tag_pipi]
         pipi = rIlo[tag_pipi]
 
-        TG = (1/(nzero + npipi)*(zero/nzero + pipi/npipi) - 1/(nnone1 + \
-                nnone2)*(none1/nnone1 + none2/nnone2)).mean(axis=0)
+        #TG = 1/(nzero + npipi)*(zero/nzero + pipi/npipi) \
+        #        - (1/(nnone1 + nnone2)*(none1/nnone1 + none2/nnone2))
+        #TG = ((zero + pipi - none1 - none2)/(nzero + npipi)).mean(axis=0)
+        TG = ((zero + pipi - none1 - none2)/(nzero + npipi)).mean(axis=0)
 
         if all([plot, table==0, t2==0]):
             plot_phasing_tg(f, TG)
-        
+            plot_phasing_tg(f, (nzero + npipi).mean(axis=0))
+
         with h5py.File(str(save_path), 'a') as sf:
             # save data at current t2
             sf['raw transient-grating'][t2] = TG 
