@@ -99,6 +99,24 @@ schema_2d = Schema({
     Optional('detrend t1'): Coerce(BoolStr),
     }, extra=REMOVE_EXTRA)
 
+schema_tg = Schema({
+    Required('jobname'): str,
+    Required('batch'): Coerce(int),
+    Required('when'): str, # probably should validate to a valid date
+    Required('wavelengths'): str,
+    Required('analysis path'): str,
+    Optional('plot'): Coerce(BoolStr),
+    Optional('force'): Coerce(BoolStr),
+    Optional('stark'): Coerce(BoolStr),
+    Optional('field on threshold'): Coerce(float),
+    Optional('probe ref delay'): Coerce(float), 
+    Optional('lo width'): Coerce(float),
+    Optional('dc width'): Coerce(float),
+    Optional('detection axis zero pad to'): Coerce(int),
+    Optional('gaussian power'): Coerce(float),
+    Optional('pump chop'): Coerce(BoolStr),
+    }, extra=REMOVE_EXTRA)
+
 schema_phasing = Schema({
     Required('path'): str,
     Required('reference name'): str,
@@ -140,6 +158,17 @@ defaults = {
         'gaussian power' : 2,
         'detrend t1': False,
         },
+    'tg' : {
+        'plot' : False,
+        'force' : False,
+        'stark' : False,
+        'field on threshold': 0.2,
+        'probe ref delay' : 850.,
+        'lo width' : 200,
+        'dc width' : 200,
+        'detection axis zero pad to' : 2048,
+        'gaussian power' : 2,
+        },
     'phasing': {
         'force': False,
         'plot' : False,
@@ -161,8 +190,11 @@ def parse_config(path, which='all'):
     path = Path(path)
     log.debug('parse_config got `{!s}` as input file'.format(path))
 
-    schemas = {'2d': schema_2d, 'pump probe': schema_pp, 'phasing':
-            schema_phasing}
+    schemas = {
+        '2d': schema_2d, 
+        'tg': schema_tg, 
+        'pump probe': schema_pp, 
+        'phasing': schema_phasing}
 
     if which == 'all':
         to_validate = schemas.items()
@@ -201,7 +233,7 @@ def parse_config(path, which='all'):
         validated = OrderedDict()
 
         for key, schema in to_validate:
-            log.info('validating section [{!s}]'.format(key))
+            log.debug('validating section [{!s}]'.format(key))
             validated[key] = schema(cfg[key])
 
         log.debug('final schema is:')
