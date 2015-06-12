@@ -292,6 +292,7 @@ def run(dd_name, dd_batch, when='today', wavelengths=None, plot=False,
         sf.attrs['probe lo delay estimate'] = prd_est
         sf.attrs['analysis timestamp'] = arrow.now().format('MM-DD-YYYY HH:mm')
         sf.attrs['nudie version'] = nudie.version 
+        sf.attrs['experiment type'] = 'stark 2d' 
         
         # write out axes
         gaxes = sf.require_group('axes')
@@ -341,7 +342,7 @@ def main(config, verbosity=nudie.logging.INFO):
                 plot=val['plot'],
                 central_wl=val['central wl'],
                 phaselock_wl=val['phaselock wl'],
-                pad_to=val['zero pad to'],
+                pad_to=val['detection axis zero pad to'],
                 waveforms_per_table=val['waveforms per table'],
                 prd_est=val['probe ref delay'],
                 lo_width=val['lo width'],

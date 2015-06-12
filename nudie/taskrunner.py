@@ -1,7 +1,7 @@
 import sys
 import nudie
 from PyQt4 import QtGui, QtCore
-from multiprocessing import Pool
+import multiprocessing
 from pathlib import Path
 
 from nudie.pump_probe import main as pp_main
@@ -18,7 +18,8 @@ class MainWindow(QtGui.QMainWindow):
         self.setWindowTitle('Nudie Task Runner')
         self.create_main_frame()
 
-        self.workers = Pool(5)
+        ctx = multiprocessing.get_context('spawn')
+        self.workers = ctx.Pool(5)
 
     def create_main_frame(self):
         self.main_frame = QtGui.QWidget()
