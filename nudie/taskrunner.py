@@ -6,6 +6,7 @@ from pathlib import Path
 
 from nudie.pump_probe import main as pp_main
 from nudie.dd import main as dd_main
+from nudie.tg import main as tg_main
 from nudie.phasing import main as phasing_main
 from nudie.apply_phase import main as apply_phase_main
 from nudie.stark_dd import main as stark_dd_main
@@ -40,7 +41,6 @@ class MainWindow(QtGui.QMainWindow):
         self.pp_btn = QtGui.QPushButton("Pump Probe")
         self.pp_btn.clicked.connect(self.on_pump_probe)
         self.tg_btn = QtGui.QPushButton("Transient Grating")
-        self.tg_btn.setEnabled(False)
         self.tg_btn.clicked.connect(self.on_tg)
         self.dd_btn = QtGui.QPushButton("2D")
         self.dd_btn.clicked.connect(self.on_dd)
@@ -78,10 +78,12 @@ class MainWindow(QtGui.QMainWindow):
                 x.setEnabled(False)
 
             self.dd_btn.setText('Stark 2D')
+            self.tg_btn.setText('Stark TG')
         elif state == 0:
             for x in [self.pp_btn]:
                 x.setEnabled(True)
             self.dd_btn.setText('2D')
+            self.tg_btn.setText('Transient Grating')
 
     def on_choose_file(self):
         try:
@@ -104,7 +106,14 @@ class MainWindow(QtGui.QMainWindow):
         self.pp_btn.setText("Pump Probe")
 
     def on_tg(self):
-        pass
+        self.tg_btn.setEnabled(False)
+        self.tg_btn.setText("Running TG")
+        self.workers.apply_async(tg_main, [self.config],{}, self.tg_done,
+            self.tg_done)
+
+    def tg_done(self, result):
+        self.tg_btn.setText("Transient Grating")
+        self.tg_btn.setEnabled(True)
 
     def on_dd(self):
         self.dd_btn.setEnabled(False)
