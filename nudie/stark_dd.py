@@ -16,6 +16,7 @@ import arrow
 import pdb
 import matplotlib
 import matplotlib.pyplot as mpl
+import sys
 
 matplotlib.rcParams['figure.figsize'] = (16,12)
 matplotlib.use('Qt4Agg')
@@ -321,25 +322,17 @@ def run(dd_name, dd_batch, when='today', wavelengths=None, plot=False,
             tmp.dims[3].attach_scale(gaxes['detection frequency'])
             tmp.dims[3].attach_scale(gaxes['detection wavelength'])
 
-if __name__ == '__main__':
-    from sys import argv
-
-    # turn on printing of errors
-    nudie.show_errors(nudie.logging.INFO)
-
-    if len(argv) < 2:
-        s = 'need a configuration file name as a parameter'
-        nudie.log.error(s)
-        raise RuntimeError(s)
+def main(config, verbosity=nudie.logging.INFO):
+    nudie.show_errors(verbosity)
 
     try:
-        val = nudie.parse_config(argv[1])['2d']
-    
+        val = nudie.parse_config(config)['2d']
+
         if val['stark'] != True:
             s = 'this is not a stark dataset according to the config file. ' +\
                     'Are you sure you shouldn\'t be running the 2d script?'
             nudie.log.error(s)
-            raise RuntimeError(s)
+            return
 
         run(dd_name=val['jobname'], 
                 dd_batch=val['batch'],
@@ -358,4 +351,18 @@ if __name__ == '__main__':
                 min_field=val['field on threshold'],
                 detrend_t1=val['detrend t1'])
     except Exception as e:
-        raise e
+        nudie.log.exception(e)
+
+if __name__ == '__main__':
+    from sys import argv
+
+    # turn on printing of errors
+    level = nudie.logging.INFO
+    nudie.show_errors(level)
+
+    if len(argv) < 2:
+        s = 'need a configuration file name as a parameter'
+        nudie.log.error(s)
+        sys.exit(-1)
+
+    main(argv[1], level)

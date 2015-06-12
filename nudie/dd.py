@@ -14,6 +14,7 @@ import numpy as np
 import arrow
 from scipy.signal import detrend
 import numpy.ma as ma
+import sys
 
 def load_wavelengths(path):
     '''load a pre-calibrated wavengths file generated with the
@@ -285,30 +286,22 @@ def run(dd_name, dd_batch, when='today', wavelengths=None, plot=False,
             tmp.dims[2].attach_scale(gaxes['detection frequency'])
             tmp.dims[2].attach_scale(gaxes['detection wavelength'])
 
-if __name__ == '__main__':
-    from sys import argv
-
-    # turn on printing of errors
-    nudie.show_errors(nudie.logging.INFO)
-
-    if len(argv) < 2:
-        s = 'need a configuration file name as a parameter'
-        nudie.log.error(s)
-        raise RuntimeError(s)
+def main(config, verbosity=nudie.logging.INFO):
+    nudie.show_errors(verbosity)
 
     try:
         try:
-            val = nudie.parse_config(argv[1], which='2d')['2d']
+            val = nudie.parse_config(config, which='2d')['2d']
         except ValueError as e:
             nudie.log.error('could not validate file. Please check ' +\
                 'configuration options.')
-            sys.exit(-1)
+            return
 
         if val['stark']:
             s = 'the stark flag is set in the configuration. You should be ' +\
                 'running the stark-2d.py script.'
             nudie.log.error(s)
-            raise RuntimeError(s)
+            return
 
         run(dd_name=val['jobname'], 
                 dd_batch=val['batch'], 
@@ -328,3 +321,17 @@ if __name__ == '__main__':
                 detrend_t1=val['detrend t1'])
     except Exception as e:
         nudie.log.exception(e)
+
+if __name__ == '__main__':
+    from sys import argv
+
+    # turn on printing of errors
+    level = nudie.logging.INFO
+    nudie.show_errors(level)
+
+    if len(argv) < 2:
+        s = 'need a configuration file name as a parameter'
+        nudie.log.error(s)
+        sys.exit(-1)
+
+    main(argv[1], level)

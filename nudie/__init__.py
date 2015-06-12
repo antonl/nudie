@@ -6,9 +6,10 @@ log.addHandler(logging.NullHandler())
 
 def show_errors(level=logging.WARNING):
     sh = logging.StreamHandler()
-    fmt = logging.Formatter('%(asctime)s %(levelname)s: %(message)s') 
+    fmt = logging.Formatter('%(asctime)s %(name)s %(levelname)s: %(message)s') 
     sh.setFormatter(fmt)
-    log.handlers[0] = sh
+    log.handlers.pop().close() # close the last handler
+    log.addHandler(sh)
     log.setLevel(level)
 
 from . import utils

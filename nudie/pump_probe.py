@@ -190,24 +190,16 @@ def run(pp_name, pp_batch, when='today', wavelengths=None, plot=False,
         app.dims[1].attach_scale(gaxes['detection frequency'])
         app.dims[1].attach_scale(gaxes['detection wavelength'])
 
-if __name__ == '__main__':
-    from sys import argv
-
-    # turn on printing of errors
-    nudie.show_errors(nudie.logging.INFO)
-
-    if len(argv) < 2:
-        s = 'need a configuration file name as a parameter'
-        nudie.log.error(s)
-        raise RuntimeError(s)
+def main(config, verbosity=nudie.logging.INFO):
+    nudie.show_errors(verbosity)
 
     try:
         try:
-            val = nudie.parse_config(argv[1], which='pump probe')['pump probe']
+            val = nudie.parse_config(config, which='pump probe')['pump probe']
         except ValueError as e:
             nudie.log.error('could not validate file. Please check ' +\
                 'configuration options.')
-            sys.exit(-1)
+            return
         
         run(pp_name=val['jobname'], pp_batch=val['batch'],
                 when=val['when'], plot=val['plot'],
@@ -215,3 +207,17 @@ if __name__ == '__main__':
                 exclude=val['exclude'], analysis_path=val['analysis path'])
     except Exception as e:
         nudie.log.exception(e)
+
+if __name__ == '__main__':
+    from sys import argv
+
+    # turn on printing of errors
+    level = nudie.logging.INFO
+    nudie.show_errors(level)
+
+    if len(argv) < 2:
+        s = 'need a configuration file name as a parameter'
+        nudie.log.error(s)
+        sys.exit(-1)
+
+    main(argv[1], level)

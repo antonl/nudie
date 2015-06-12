@@ -14,6 +14,7 @@ import numpy as np
 import arrow
 import matplotlib.pyplot as mpl
 from math import floor
+import sys
 
 def make_objective(f, pp, tg, limits=(None, None)):
     '''create objective function for matching pump probe to TG'''
@@ -275,29 +276,22 @@ def run(path, pp_name, pp_batch, dd_name, dd_batch, plot=False, force=False,
 
         del phased_2D
 
-if __name__ == '__main__':
-    from sys import argv
-    # turn on printing of errors
-    nudie.show_errors(nudie.logging.INFO)
-
-    if len(argv) < 2:
-        s = 'need a configuration file name as a parameter'
-        nudie.log.error(s)
-        raise RuntimeError(s)
+def main(config, verbosity=nudie.logging.INFO):
+    nudie.show_errors(verbosity)
 
     try:
         try:
-            val = nudie.parse_config(argv[1], which='phasing')['phasing']
+            val = nudie.parse_config(config, which='phasing')['phasing']
         except ValueError as e:
             nudie.log.error('could not validate file. Please check ' +\
                 'configuration options.')
-            sys.exit(-1)
+            return
 
-        if val['copy'] is True:
+        if val['copy']:
             s = '`copy` flag is set. You should be using the apply-phase.py ' +\
                 'script instead'
             nudie.log.error(s)
-            raise RuntimeError(s)
+            return
 
         run(val['path'], 
             val['reference name'], 
@@ -316,3 +310,16 @@ if __name__ == '__main__':
             excitation_axis_zero_pad_to=val['excitation axis zero pad to'])
     except Exception as e:
         nudie.log.exception(e)
+
+if __name__ == '__main__':
+    from sys import argv
+    # turn on printing of errors
+    level = nudie.logging.INFO
+    nudie.show_errors(level)
+
+    if len(argv) < 2:
+        s = 'need a configuration file name as a parameter'
+        nudie.log.error(s)
+        sys.exit(-1)
+
+    main(argv[1], level)

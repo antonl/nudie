@@ -14,6 +14,7 @@ from collections import deque
 import numpy as np
 import arrow
 import matplotlib.pyplot as mpl
+import sys
 
 def run(path, ref_name, ref_batch, dd_name, dd_batch, plot=False,
         force=False, stark=False):
@@ -177,30 +178,22 @@ def run(path, ref_name, ref_batch, dd_name, dd_batch, plot=False,
                 mpl.colorbar()
                 mpl.show()
 
-if __name__ == '__main__':
-    from sys import argv
-
-    # turn on printing of errors
-    nudie.show_errors(nudie.logging.INFO)
-
-    if len(argv) < 2:
-        s = 'need a configuration file name as a parameter'
-        nudie.log.error(s)
-        raise RuntimeError(s)
+def main(config, verbosity=nudie.logging.INFO):
+    nudie.show_errors(verbosity)
 
     try:
         try:
-            val = nudie.parse_config(argv[1], which='phasing')['phasing']
+            val = nudie.parse_config(config, which='phasing')['phasing']
         except ValueError as e:
             nudie.log.error('could not validate file. Please check ' +\
                 'configuration options.')
-            sys.exit(-1)
+            return
 
-        if val['copy'] is False:
+        if val['copy'] == False:
             s = '`copy` flag is not set. You should be using the phasing.py ' +\
                 'script instead'
             nudie.log.error(s)
-            raise RuntimeError(s)
+            return
 
         run(val['path'], 
                 val['reference name'], 
@@ -212,3 +205,17 @@ if __name__ == '__main__':
                 stark=val['stark'])
     except Exception as e:
         nudie.log.exception(e)
+
+if __name__ == '__main__':
+    from sys import argv
+
+    # turn on printing of errors
+    level = nudie.logging.INFO
+    nudie.show_errors(level)
+
+    if len(argv) < 2:
+        s = 'need a configuration file name as a parameter'
+        nudie.log.error(s)
+        sys.exit(-1)
+
+    main(argv[1], level)
