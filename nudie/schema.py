@@ -121,8 +121,8 @@ schema_phasing = Schema({
     Required('path'): str,
     Required('reference name'): str,
     Required('reference batch'): Coerce(int),
-    Required('2d name'): str,
-    Required('2d batch'): Coerce(int),
+    Required('experiment name'): str,
+    Required('experiment batch'): Coerce(int),
     Optional('copy'): Coerce(BoolStr),
     Optional('phasing guess'): Coerce(FloatList),
     Optional('excitation axis zero pad to'): Coerce(int),
@@ -131,7 +131,6 @@ schema_phasing = Schema({
     Optional('pixel range to fit'): Coerce(IntList), # check that lb < ub
     Optional('force'): Coerce(BoolStr),
     Optional('plot'): Coerce(BoolStr),
-    Optional('stark'): Coerce(BoolStr),
     Optional('phaselock wl'): Coerce(float),
     Optional('central wl'): Coerce(float),
     Optional('phasing t2'): Coerce(float),
@@ -182,7 +181,6 @@ defaults = {
         'phaselock wl' : 650,
         'central wl' : 650,
         'phasing t2' : 10000,
-        'stark' : False
         },
     }
 

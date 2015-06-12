@@ -212,6 +212,7 @@ def run(tg_name, tg_batch, when='today', wavelengths=None, plot=False,
         sf.attrs['probe lo delay estimate'] = prd_est
         sf.attrs['analysis timestamp'] = arrow.now().format('DD-MM-YYYY HH:mm')
         sf.attrs['nudie version'] = nudie.version
+        sf.attrs['experiment type'] = 'transient grating'
         
         # write out axes
         gaxes = sf.require_group('axes')

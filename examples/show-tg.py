@@ -83,7 +83,6 @@ with h5py.File(file_to_open, 'r') as sf:
             np.argmin(np.abs(f3 - probe_axis_limits[1])))    
     
     f3 = f3[f3_slice]
-
     
     res = np.abs(tg).T
     #res = np.rot90(np.abs(tg), -1)

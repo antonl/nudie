@@ -167,6 +167,7 @@ def run(pp_name, pp_batch, when='today', wavelengths=None, plot=False,
         sf.attrs['nloop'] = pp_info['loop_range'].stop
         sf.attrs['analysis timestamp'] = arrow.now().format('DD-MM-YYYY HH:mm')
         sf.attrs['nudie version'] = nudie.version
+        sf.attrs['experiment type'] = 'pump probe' 
 
         # add dimension scales
         rpp = sf['raw pump-probe']
