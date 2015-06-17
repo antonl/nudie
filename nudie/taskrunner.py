@@ -50,8 +50,9 @@ class MainWindow(QtGui.QMainWindow):
         self.stark_chk.stateChanged.connect(self.on_stark_check)
 
         for x in [self.pp_btn, self.tg_btn, self.dd_btn, self.stark_chk]:
+            x.setMinimumWidth(120)
             exp_layout.addWidget(x)
-        exp_layout.addStretch(1)
+            exp_layout.setStretchFactor(x, 1)
         exp_group.setLayout(exp_layout)
 
         phasing_group = QtGui.QGroupBox("Phasing and such")
