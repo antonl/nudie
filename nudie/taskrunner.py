@@ -7,6 +7,7 @@ from pathlib import Path
 from nudie.pump_probe import main as pp_main
 from nudie.dd import main as dd_main
 from nudie.tg import main as tg_main
+from nudie.stark_tg import main as stark_tg_main
 from nudie.phasing import main as phasing_main
 from nudie.apply_phase import main as apply_phase_main
 from nudie.stark_dd import main as stark_dd_main
@@ -78,7 +79,6 @@ class MainWindow(QtGui.QMainWindow):
         if state == 2: # checked
             for x in [self.pp_btn]:
                 x.setEnabled(False)
-
             self.dd_btn.setText('Stark 2D')
             self.tg_btn.setText('Stark TG')
         elif state == 0:
@@ -109,12 +109,20 @@ class MainWindow(QtGui.QMainWindow):
 
     def on_tg(self):
         self.tg_btn.setEnabled(False)
-        self.tg_btn.setText("Running TG")
-        self.workers.apply_async(tg_main, [self.config],{}, self.tg_done,
-            self.tg_done)
+        if self.stark_chk.isChecked():
+            self.tg_btn.setText("Running stark tg")
+            self.workers.apply_async(stark_tg_main, [self.config],{}, self.tg_done,
+                self.tg_done)
+        else:
+            self.tg_btn.setText("Running TG")
+            self.workers.apply_async(tg_main, [self.config],{}, self.tg_done,
+                self.tg_done)
 
     def tg_done(self, result):
-        self.tg_btn.setText("Transient Grating")
+        if self.stark_chk.isChecked():
+            self.tg_btn.setText("Stark TG")
+        else:
+            self.tg_btn.setText("Transient Grating")
         self.tg_btn.setEnabled(True)
 
     def on_dd(self):

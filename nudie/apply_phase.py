@@ -19,6 +19,10 @@ import pdb
 
 def plot_phased_tg(t2, f3, tg, stark=False):
     from nudie.utils.plotting import shiftedColorMap
+
+    if stark:
+        return
+
     res = np.real(tg).T
 
     nlevels = 50
@@ -46,7 +50,6 @@ def plot_phased_tg(t2, f3, tg, stark=False):
 
     ax2.plot(-t2, xsection)
     ax2.grid()
-
     gs.tight_layout(fig)
     mpl.show()
 
@@ -77,16 +80,18 @@ def apply_phase_tg(tg_file, correction_multiplier, correction_offset, **kwargs):
         TG = sf['raw transient-grating']
 
         if stark:
+            print('TG shape: ' + str(TG.shape))
             nstark = 2
-            spectra_shape = (sf.attrs['nt2'], nstark, dd_f.shape[0])
-            raise NotImplementedError('cannot apply phase to stark ' +\
-                    'datasets yet')
+            spectra_shape = (sf.attrs['nt2'], nstark, TG.shape[2])
+            phased_TG = correction_multiplier*TG + correction_offset
+            tg = sf.require_dataset('phased transient-grating', shape=spectra_shape,
+                    dtype=complex, data=phased_TG) 
         else:
             spectra_shape = (sf.attrs['nt2'], TG.shape[1])
 
             # is TG scaled the same way as the 2D? I don't think so...
             phased_TG = correction_multiplier*TG + correction_offset
-            tg = sf.require_dataset('phased rephasing', shape=spectra_shape,
+            tg = sf.require_dataset('phased transient-grating', shape=spectra_shape,
                     dtype=complex, data=phased_TG) 
 
         for x in [tg,]:
@@ -248,8 +253,8 @@ def apply_phase_2d(dd_file, correction_multiplier, correction_offset, **kwargs):
                 mpl.show()
 
 experiment_map = {
-    'transient grating': (apply_phase_tg, {}), 
-    'stark transient grating': (apply_phase_tg, {'stark':True}), 
+    'transient-grating': (apply_phase_tg, {}), 
+    'stark transient-grating': (apply_phase_tg, {'stark':True}), 
     '2d': (apply_phase_2d, {}),
     'stark 2d': (apply_phase_2d, {'stark':True}),
     }
@@ -338,7 +343,7 @@ if __name__ == '__main__':
     from sys import argv
 
     # turn on printing of errors
-    level = nudie.logging.INFO
+    level = nudie.logging.DEBUG
     nudie.show_errors(level)
 
     if len(argv) < 2:
