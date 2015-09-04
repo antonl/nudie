@@ -26,17 +26,13 @@ from scipy.interpolate import interp1d
 from scipy.io import loadmat
 import arrow
 import numpy as np
-
-#import numexpr
 import h5py
-
-import matplotlib
-matplotlib.rcParams['figure.figsize'] = (16, 9)
+import numpy.ma as ma
 
 import argparse
 
 # turn on printing of errors
-nudie.show_errors(nudie.logging.WARNING)
+nudie.show_errors(nudie.logging.INFO)
 
 def make_parser():
     parser = argparse.ArgumentParser(
@@ -176,7 +172,10 @@ def run(stark_name, stark_batch, when='today', wavelengths=None, plot=False):
             # and for no-stark shots
             data[:, no] -= data[:, nc].mean(axis=-1)[:, np.newaxis]        
             
-            tmp.append(np.log10(np.mean(data[:, so], axis=-1)/np.mean(data[:, no], axis=-1)))
+            data = ma.masked_less(data, 1e-7*data.max())
+            stark_spec = np.log10(np.mean(data[:, so], axis=-1)/np.mean(data[:, no], axis=-1))
+            stark_spec = ma.filled(stark_spec, 0)
+            tmp.append(stark_spec)
         
         # average phase cycles together to get slight improvement in S/N
         px = max([len(i) for i in tmp]) # num pixels
@@ -205,8 +204,8 @@ def run(stark_name, stark_batch, when='today', wavelengths=None, plot=False):
                 name=stark_info['batch_name'], voltage=mean_voltage)
 
         with h5py.File(str(analysis_folder / filename), mode='w') as f:
-            for data, loop in saved_data:
-                f[loop] = data
+            for data, j in saved_data:
+                f[j] = data
             
             f.attrs['applied voltage'] = mean_voltage
             f.attrs['file path'] = stark_info['batch_path']
@@ -216,10 +215,21 @@ def run(stark_name, stark_batch, when='today', wavelengths=None, plot=False):
             if wavelengths is not None:
                 f['wavelength axis'] = wl
 
+            if all([plot, loop == stark_info['loop_range'].stop-1]):
+                for data, loop in saved_data:
+                    pyplot.plot(wl, data, label=loop)
+
+                pyplot.xlabel('wavelength / nm')
+                pyplot.ylabel('OD')
+                pyplot.show()
+            
 if __name__ == '__main__':
     parser = make_parser()
     args = vars(parser.parse_args())
     
+    if args['plot']:
+        import matplotlib.pyplot as pyplot
+
     try:
         run(stark_name=args['jobname'], stark_batch=args['batch'],
                 when=args['when'], plot=args['plot'],
