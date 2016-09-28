@@ -33,5 +33,5 @@ except RuntimeError as e:
 # this must be loaded after setup_paths is run
 from .utils.batch_loader import load_job
 
-from . import dd, pump_probe, phasing, apply_phase, stark_dd
+from . import dd, pump_probe, phasing, apply_phase, stark_dd, dataset
 
