@@ -34,7 +34,7 @@ res = a.compute()
 #res = a
 
 import matplotlib.pyplot
-matplotlib.pyplot.plot(res._stark_spectra[0][0])
+matplotlib.pyplot.plot(res.stark_spectra[0])
 matplotlib.pyplot.show()
 
 '''

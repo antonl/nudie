@@ -204,6 +204,7 @@ class LinearStark(Dataset):
             nostark_idx = npw(rd.analog_channels.a2 <= self.field_on_threshold_volts)[0]
 
             tmp = [] # holds stark spectra from different phases
+            meta = [] # holds debug information for stark spectra (t2, table, loop)
             for i,k in enumerate(self.phase_cycles):
                 # isolate indexes of scatter in different phases and remove
                 so = i1d(tags[nrepeat-1][nwaveforms-1][k]['shutter open'], 
@@ -243,10 +244,12 @@ class LinearStark(Dataset):
             else:
                 avg_spectrum = sum(tmp)/len(tmp)
 
-            stark_spectra.append((avg_spectrum, (rd.t2, rd.table,
-                rd.loop)))
+            stark_spectra.append(avg_spectrum)
+            meta.append((rd.t2, rd.table, rd.loop))
 
-        self._stark_spectra = stark_spectra
+        self.stark_spectra = stark_spectra
+        self.meta = meta
+
         return self
 
 class DD(Dataset):
