@@ -8,6 +8,8 @@ import nudie
 import itertools as it
 from traitlets.config.configurable import Configurable
 from traitlets.config import Config
+import itertools
+import dask
 from dask.delayed import delayed
 from collections import namedtuple
 from contextlib import contextmanager
@@ -49,11 +51,15 @@ class RawData(Configurable):
     batch_path = traitlets.Unicode(help='location of the batch folder on disk', 
         config=True, allow_none=False)
 
-    table = traitlets.Int(help='Dazzler table number', default_value=0,
+    tableidx = traitlets.Int(help='Dazzler table number', default_value=0,
             config=True)
-    loop = traitlets.Int(help='camera loop number', default_value=0,
+    loopidx = traitlets.Int(help='camera loop number', default_value=0,
             config=True)
-    t2 = traitlets.Int(help='T2 index', default_value=0, config=True)
+    t2idx = traitlets.Int(help='T2 index', default_value=0, config=True)
+    t2 = traitlets.Float(help='T2 time in fs', config=True)
+    
+    nt2 = traitlets.Int(help='number of T2 points', default_value=1, config=True)
+    nloop = traitlets.Int(help='number of loops', default_value=1, config=True)
 
     @traitlets.validate('batch_path')
     def _validate_batch_path(self, proposal):
@@ -69,9 +75,9 @@ class RawData(Configurable):
     def process(self):
         '''execute the loading of raw data from disk
         '''
-        t2 = self.t2
-        table = self.table
-        loop = self.loop
+        t2 = self.t2idx
+        table = self.tableidx
+        loop = self.loopidx
 
         # first file requires special synchronization
         # this is the rule that determines that it is the first file
@@ -95,9 +101,14 @@ class RawData(Configurable):
 
         # determine where the shutter is
         shutter_open, shutter_closed, duty_cycle = nudie.determine_shutter_shots(data)
-        shutter_info = {'last open idx': shutter_open, 'first closed idx': shutter_closed}                
+        shutter_info = {'last open idx': shutter_open, 
+                        'first closed idx': shutter_closed}                
         
-        tags = nudie.tag_phases(start_idxs, period, tags=self.phase_cycles, nframes=data.shape[1], shutter_info=shutter_info)
+        tags = nudie.tag_phases(start_idxs,
+                                period,
+                                tags=self.phase_cycles,
+                                nframes=data.shape[1],
+                                shutter_info=shutter_info)
 
         self.tags = tags
         self.camera_data = data
@@ -115,12 +126,18 @@ class Transformation(Configurable):
         return dset
 
 class AttachWavelengthAxis(Transformation):
-    def __init__(self, *args, **kwargs):
-        super(Configurable, self).__init__(self, *args, **kwargs)
+    def __init__(self, wl_dset, **kwargs):
+        super(Configurable, self).__init__(self, **kwargs)
+        self.calibrated_wavelength = wl_dset.calibrated_wavelength        
         
-    def apply(self, dset, other=[], **kwargs):
-        pass
- 
+    def apply(self, dset, other=[], dim=None):
+        if dim is None:
+            return dset
+        
+        ax = axis(label='wavelength', dim=dim, data=self.calibrated_wavelength)
+        dset.axes.append(ax)
+        return dset
+        
 class SpectralInterferometery(Transformation):
     def apply(self, dset, other=[]):
         pass
@@ -193,14 +210,20 @@ class Dataset(Configurable):
         pass
     
     def compute(self):
-        '''dummy method to allow use with or without parallel
+        '''perform calculation of data, if allow_parallel was on
         '''
+        if self.allow_parallel:
+            self._computehook()
+            #self._computeaxes()
+            
         return self
+        
+    def _computehook(self):
+        pass
     
     def transform(self, transform, *args, **kwargs):
         '''apply a transformation to the dataset to return a new dataset'''
-        xfm = delayed(transform) if self.allow_parallel else transform
-        return xfm(self, *args, **kwargs)
+        return transform.apply(self, *args, **kwargs)
         
     @traitlets.validate('path')
     def _validate_batch_path(self, proposal):
@@ -222,8 +245,7 @@ class WavelengthCalibration(Dataset):
         help='method used to get calibration')
     
     def __init__(self, *args, **kwargs):
-        super(WavelengthCalibration, self).__init__(**kwargs)
-        
+        super(WavelengthCalibration, self).__init__(**kwargs)        
         
     @classmethod
     def from_mat_file(klass, path):
@@ -285,9 +307,79 @@ class PP(Dataset):
     type = 'pump-probe'
 
     phase_cycles = ['none1', 'zero', 'none2', 'pipi']
-
+    
+    allow_shot2shot = traitlets.Bool(help='allow shot-to-shot processing', 
+                                     default_value=False, config=True)
+    esa_sign = traitlets.Enum(['positive', 'negative'], 
+        help='sign of ESA signal, for setting sign convention',
+        default_value='negative')
+    
+    pp_meta = namedtuple('meta', ['t2idx', 'tableidx', 'loopidx'])
+        
     def __init__(self, *args, **kwargs):
         super(PP, self).__init__(*args, **kwargs)
+    
+    def from_raw_data(self, iterable):
+        tmp_loops = {}        
+        pp_spectra = []
+        t2map = {}
+        
+        for d in iterable:
+            # save meta info before processing
+            dmeta = self.pp_meta(d.t2idx, d.tableidx, d.loopidx)
+            t2map[d.t2idx] = d.t2
+            rd = delayed(d).process() if self.allow_parallel else d.process()
+            
+            tags = rd.tags
+            nrepeat = rd.nrepeat
+            nwaveforms = rd.nwaveforms
+            camera_data = rd.camera_data
+
+            if not self.allow_parallel:
+                assert all([nrepeat == 1, nwaveforms == 1]), \
+                    'nrepeat and nwaveforms must be 1'            
+                
+            tags = tags[0][0]             
+            
+            # subtract scatter from shutter closed shots
+            zero = camera_data[:, tags['zero']['shutter open']].mean(axis=-1) \
+                    - camera_data[:, tags['zero']['shutter closed']].mean(axis=-1)
+            pipi = camera_data[:, tags['pipi']['shutter open']].mean(axis=-1) \
+                    - camera_data[:, tags['pipi']['shutter closed']].mean(axis=-1)
+            none1 = camera_data[:, tags['none1']['shutter open']].mean(axis=-1) \
+                    - camera_data[:, tags['none1']['shutter closed']].mean(axis=-1)
+            none2 = camera_data[:, tags['none2']['shutter open']].mean(axis=-1) \
+                    - camera_data[:, tags['none2']['shutter closed']].mean(axis=-1)
+            
+            # subtract phases to get dT/T            
+            dT1 = 0.25*(zero - none1)
+            dT2 = 0.25*(pipi - none2)
+            
+            # Unpumped signal
+            T = 0.5*(none1 + none2)
+            
+            sign = 1 if self.esa_sign == 'negative' else -1
+            signal = sign*(dT1 + dT2)/T
+            tmp_loops[dmeta] = signal
+        
+        # group signals by t2 average them. table is unused
+        t2axis = []
+        keyfunc = lambda x: (x[0], x[1])
+        for (t2idx, table), grp in itertools.groupby(sorted(tmp_loops.keys()), keyfunc):
+            loop_keys = list(grp)
+            avg_signal = sum([tmp_loops[k] for k in loop_keys])/len(loop_keys)
+            t2axis.append(t2map[t2idx])
+            pp_spectra.append(avg_signal)
+            
+        self.pump_probe_spectra = pp_spectra
+        
+        ax = axis(label='population time', dim=0, data=np.array(t2axis))
+        self.axes.append(ax)
+
+        return self
+    
+    def _computehook(self):
+        self.pump_probe_spectra = [s.compute() for s in self.pump_probe_spectra]
 
 class LinearStark(Dataset):
     type = 'linear Stark'
@@ -303,7 +395,7 @@ class LinearStark(Dataset):
                 + 'to avoid division by zero')
                 
     linear_stark_meta = namedtuple('meta', 
-        ['t2', 'table', 'loop', 'voltage_on', 'voltage_off'])
+        ['t2idx', 'tableidx', 'loopidx', 'voltage_on', 'voltage_off'])
     
     def __init__(self, *args, **kwargs):
         super(LinearStark, self).__init__(*args, **kwargs)
@@ -316,19 +408,21 @@ class LinearStark(Dataset):
         l10 = delayed(np.log10) if self.allow_parallel else np.log10
         mf = delayed(ma.filled) if self.allow_parallel else ma.filled
 
-        stark_spectra = []
-        for rd in iterable:
+        self.stark_spectra = []
+        self.meta = []
+        for d in iterable:
+            rd = delayed(d).process() if self.allow_parallel else d.process()
+            
+            nrepeat = d.nrepeat
             tags = rd.tags
-            nrepeat = rd.nrepeat
             nwaveforms = rd.nwaveforms
-            camera_data = delayed(rd.camera_data) if self.allow_parallel else rd.camera_data
-            a2 = delayed(rd.analog_channels.a2) if self.allow_parallel else rd.analog_channels.a2 
+            camera_data = rd.camera_data
+            a2 = rd.analog_channels.a2 
 
             stark_idx = npw(a2 > self.field_on_threshold_volts)[0]
             nostark_idx = npw(a2 <= self.field_on_threshold_volts)[0]
 
-            tmp = [] # holds stark spectra from different phases
-            meta = [] # holds debug information for stark spectra (t2, table, loop)
+            tmp = [] # holds stark spectra from different phases            
             for i,k in enumerate(self.phase_cycles):
                 # isolate indexes of scatter in different phases and remove
                 so = i1d(tags[nrepeat-1][nwaveforms-1][k]['shutter open'], 
@@ -360,38 +454,30 @@ class LinearStark(Dataset):
                 # fill masked areas with zero
                 stark_spec_filled = mf(stark_spec, 0)
                 tmp.append(stark_spec_filled)
-
-            # average stark spectra from each phase cycle (they should be
-            # identical
-            if self.allow_parallel:
-                avg_spectrum = delayed(sum)(tmp)/len(tmp)
-                tmp_meta = delayed(self.linear_stark_meta)(rd.t2, rd.table, rd.loop, 
+            
+            avg_spectrum = sum(tmp)/len(tmp)
+            tmp_meta = self.linear_stark_meta(d.t2idx, d.tableidx, d.loopidx, 
                     a2[stark_idx].mean(),
                     a2[nostark_idx].mean())
-            else:
-                avg_spectrum = sum(tmp)/len(tmp)
-                tmp_meta = self.linear_stark_meta(rd.t2, rd.table, rd.loop, 
-                    a2[stark_idx].mean(),
-                    a2[nostark_idx].mean())
+                    
+            self.stark_spectra.append(avg_spectrum)
+            self.meta.append(tmp_meta)
 
-            stark_spectra.append(avg_spectrum)            
-            meta.append(tmp_meta)
-
-        if self.allow_parallel:
-            self.stark_spectra = [s.compute() for s in stark_spectra]
-            self.meta = [m.compute() for m in meta]
-        else:
-            self.stark_spectra = stark_spectra
-            self.meta = meta
-        
-        # create voltage axis
         voltage_data = np.array([m.voltage_on - m.voltage_off for m in self.meta])
         voltage_axis = axis(label='voltage', dim=0, data=voltage_data)
         self.axes.append(voltage_axis)
-        
         return self
     
+    def _computehook(self):
+        self.stark_spectra, *voltage_data = dask.compute(self.stark_spectra, 
+                            *self.axes[0].data)        
+        vax = self.axes[0] # assume only voltage axis needs to be calculated
+        self.axes[0] = axis(vax.label, vax.dim, np.array(voltage_data))        
+        self.axes = dask.compute(self.axes)
+    
     def _savehook(self, h5file):
+        self.compute()
+        
         nspectra = len(self.stark_spectra)
 
         if nspectra < 1:
@@ -410,7 +496,8 @@ class LinearStark(Dataset):
             data.attrs[name] = trait.get(self)
         
         gax = h5file.require_group('axes')
-        for ax in self.axes:                    
+        for ax in self.axes:
+            print(ax.data)
             fax = gax.require_dataset(ax.label, 
                                       shape=ax.data.shape, 
                                       dtype=ax.data.dtype,
@@ -501,6 +588,12 @@ class FastDazzlerSetupLoader(DatasetLoader):
     nrepeat = traitlets.Int(default_value=1,
         help='number of times each waveform is repeated in camera file; not '\
         + 'the same as Dazzler NRepeat', config=True)
+    
+    nt2 = traitlets.Int(default_value=1,
+        help='number of population time points in batch')
+        
+    nloops = traitlets.Int(default_value=1,
+        help='number of loops in batch')        
 
     data_type = traitlets.Type(klass=Dataset, config=True)
 
@@ -540,23 +633,19 @@ class FastDazzlerSetupLoader(DatasetLoader):
             c.RawData.batch_path = self.batch_path
             c.RawData.nwaveforms = self.nwaveforms
             c.RawData.nrepeat = self.nrepeat
-            c.RawData.t2 = t2
-            c.RawData.table = table
-            c.RawData.loop = loop
+            c.RawData.t2idx = t2
+            c.RawData.t2 = batch_info['t2'][t2, 1]
+            c.RawData.nt2 = batch_info['t2_range'].stop
+            c.RawData.tableidx = table
+            c.RawData.loopidx = loop
+            c.RawData.nloop = batch_info['loop_range'].stop
             c.RawData.phase_cycles = self.data_type.phase_cycles
 
             c.Dataset.allow_parallel = self.allow_parallel
             c.merge(self.config)
 
-            if self.allow_parallel:
-                raw_datas.append(delayed(RawData)(config=c).process())
-            else:
-                raw_datas.append(RawData(config=c).process())
+            raw_datas.append(RawData(config=c))
 
-        # create dataset and process it
-        if self.allow_parallel:
-            dset = delayed(self.data_type)(config=c)
-        else:
-            dset = self.data_type(config=c)
-
+        # create dataset and return it
+        dset = self.data_type(config=c)
         return dset.from_raw_data(raw_datas)
