@@ -13,13 +13,14 @@ import toolz
 import itertools as it
 import re
 import numpy as np
+import pandas as pd
 from multiprocessing import Pool
 from winspec import SpeFile
 
 starmap = toolz.curry(it.starmap)
 rcompose = lambda *fns: toolz.comp(*list(reversed(fns)))
 curry = toolz.curry
-
+map = toolz.curry(map)
 
 '''
 Test implementation of work graph that uses signals to represent input and
@@ -189,7 +190,8 @@ class BatchLoader(Worker):
             spe_file = str(loaded_path / (fn + '.spe'))
             analog1 = str(loaded_path / (fn + '-analog1.txt'))
             analog2 = str(loaded_path / (fn + '-analog2.txt'))
-            yield spe_file, [analog1, analog2], indexes, t1vals, t2vals, loaded_path.name
+            yield spe_file, [analog1, analog2], indexes, t1vals, t2vals, \
+                loaded_path.name, (max_t2+1, max_table+1, max_loop+1)
     
 class CallTester(Worker):
     def __call__(self, args):
@@ -205,26 +207,19 @@ class DataChunkLoader(Worker):
             '; used for removing saturated frames at the beginning of ' +\
             'acquisition').tag(config=True)
 
-    phase_cycles = traitlets.List(default_value=['frame'], minlen=1,
-        help='iterable containing phase-cycle labels').tag(config=True)
-
-    nwaveforms = traitlets.Int(default_value=1, 
-        help='number of waveforms in the Dazzler table').tag(config=True)
-
-    nrepeat = traitlets.Int(default_value=1,
-        help='number of times each waveform is repeated in camera file; not '\
-        + 'the same as Dazzler NRepeat').tag(config=True)
-    
     offby = traitlets.Int(default_value=3,
         help='number of laser shots offset between camera and DAQ after the '\
         + 'first file.')
 
     #inputs = namedtuple('inputs', ['spe_file', 'analogs', 'indexes'])
 
-    def __call__(self, spe_file, analogs, indexes, t1vals, t2vals, dset_name):
+    def __call__(self, spe_file, analogs, indexes, t1vals, t2vals, dset_name,
+            max_indexes):
         '''perform data conversion given the proper files
         '''
+
         assert all([idx > -1 for idx in indexes]), "indexes must be non-negative"
+
         t2_idx = indexes[0]
         table_idx = indexes[1]
         loop_idx = indexes[2]
@@ -236,48 +231,209 @@ class DataChunkLoader(Worker):
         camera_data, analogs = synchronize_daq_to_camera(spe_data, analog_channels,
                                                          which_file=first, offby=self.offby)
         
-        camera_data = camera_data.reshape(1, 1, 1, *camera_data.shape)
-        analogs = [a.reshape(1, 1, 1, *a.shape) for a in analogs]
-        coords = {'t2_index': np.array([t2_idx]),
-                  'table_index': np.array([table_idx]),
-                  'loop_index': np.array([loop_idx]), 
-                  'laser_shot': np.arange(camera_data.shape[3]),
-                  'pixel': np.arange(camera_data.shape[4])
+        coords = {'laser_shot': np.arange(camera_data.shape[0]),
+                  'pixel': np.arange(camera_data.shape[1])
                   }
 
-        #print(list(toolz.pipe(coords, starmap, toolz.first)))
-        data_vars = {'spectrometer_data': (['t2_index', 'table_index', 'loop_index', 'laser_shot', 'pixel'], camera_data),
-                     'achan1': (['t2_index', 'table_index', 'loop_index', 'laser_shot'], analogs[0]),
-                     'achan2': (['t2_index', 'table_index', 'loop_index', 'laser_shot'], analogs[1])}
+        data_vars = {'spectrometer_data': (['laser_shot', 'pixel'], camera_data),
+                     'achan1': (['laser_shot'], analogs[0]),
+                     'achan2': (['laser_shot'], analogs[1])}
 
         dset = xr.Dataset(data_vars, coords=coords)
         
+        dset.attrs['t2idx'] = t2_idx
+        dset.attrs['tableidx'] = table_idx
+        dset.attrs['loopidx'] = loop_idx
         dset.attrs['t2vals'] = -t2vals
         dset.attrs['t1vals'] = -t1vals
         dset.attrs['name'] = dset_name
+        dset.attrs['maxidx'] = max_indexes
         
         return dset
+
+class PhaseCycler(Worker):
+    phase_cycles = traitlets.List(default_value=['frame'], minlen=1,
+        help='iterable containing phase-cycle labels').tag(config=True)
+
+    nwaveforms = traitlets.Int(default_value=1, 
+        help='number of waveforms in the Dazzler table').tag(config=True)
+
+    nrepeat = traitlets.Int(default_value=1,
+        help='number of times each waveform is repeated in camera file; not '\
+        + 'the same as Dazzler NRepeat').tag(config=True)
+
+    trigger_threshold = traitlets.Float(default_value=1.9, 
+        help='voltage threshold for counting trigger as high')
+
+    shutter_detect_pixel = traitlets.Int(default_value=670,
+        help='pixel index to observe for shutter detection')
+
+    shutter_transition_width = traitlets.Int(default_value=5, 
+        help='number of laser shots around the shutter index to throw away '+\
+            'as "partially open shots"')
+
+    def __call__(self, dset):
+        assert self.nrepeat == 1, "cannot handle nrepeat > 1"
+        assert len(dset['achan1'].shape) == 1, "incorrect dset shape"
+
+        table_starts, period = self.detect_table_start(dset['achan1'])
+        
+        # index the whole dataset simultaneously to keep only complete
+        # table sets 
+        dset = dset.isel(laser_shot=slice(table_starts[0], table_starts[-1]))
+        
+        nshots_probe_on, nshots_transition, nshots_probe_off = \
+            self.detect_shutter_index(dset['spectrometer_data'])
+
+        # fancy-ness: use a pandas MultiIndex to break laser shot index into 
+        # a three-level index: t1 index, phase index, shutter
+        shutter_levels = ['open', 'transition', 'closed']
+        shutter_labels = np.hstack((
+            np.zeros((nshots_probe_on, ), dtype=int),
+            np.ones((nshots_transition,), dtype=int),
+            2*np.ones((nshots_probe_off,), dtype=int)))
+
+        assert shutter_labels.shape[0] == len(dset.coords['laser_shot']), \
+                'label length must equal data length'
+
+        # NOTE: to add nrepeat handling, reshape this to include nrepeat
+        # dimension
+        complete_indexes = table_starts[-1] - table_starts[0]
+
+        tmp1 = np.empty((complete_indexes,), dtype=int)\
+            .reshape(-1, self.nwaveforms, len(self.phase_cycles))
+        tmp2 = np.empty((complete_indexes,), dtype=int)\
+            .reshape(-1, self.nwaveforms, len(self.phase_cycles))
+
+        for i, p in enumerate(self.phase_cycles):
+            tmp1[:, :, i] = i
+        
+        for i in range(self.nwaveforms):
+            tmp2[:, i, :] = i + self.nwaveforms*dset.attrs['tableidx']
+
+        phase_labels = tmp1.ravel()
+        t1_labels = tmp2.ravel()
+
+        # voodoo logic to decide how many actual t1vals we have
+        # assumes same number of waveforms in each table
+        ntables = dset.attrs['maxidx'][1]
+        t1_levels = list(range(self.nwaveforms*ntables))
+
+        idx = pd.MultiIndex(levels=[t1_levels, self.phase_cycles, shutter_levels],
+                labels=[t1_labels, phase_labels, shutter_labels],
+                names=['t1_index', 'phase_cycle', 'shutter_label'])
+        
+        return dset.assign_coords(laser_shot=idx)
+
+    def detect_table_start(self, array, waveform_repeat=1):
+        '''detects peaks output when the Dazzler table starts at the begining by
+        looking at the discrete difference of the array.
+        '''
+
+        diff = self.trigger_threshold 
+        darr = np.diff(array)
+        lohi, hilo = np.argwhere(darr > diff), np.argwhere(darr < -diff)
+
+        # should be short cut evaluation, so second statement assumes same length
+        # arrays
+        if len(lohi) != len(hilo) or not np.all(lohi < hilo):
+            #log.debug('spike showed up as the first or last signal')
+            # check which one is longer, and which comes first 
+            mlen = min(len(lohi), len(hilo))
+            #log.debug('minimal length is {:d}'.format(mlen))
+            if len(lohi) > mlen:
+                # order is correct, but hilo is missing a point
+                # truncate lohi at the end
+                #log.debug('truncated lohi to match hilo')
+                lohi = lohi[:-1]
+                assert len(lohi) == len(hilo), 'did not help'
+            elif len(hilo) > mlen:
+                # order is incorrect, must be missing first point
+                #log.debug('truncated hilo to match lohi')
+                hilo = hilo[1:]
+                assert len(lohi) == len(hilo), 'did not help'
+            elif not np.all(lohi[:mlen] < hilo[:mlen]):
+                #log.debug('both sides missing, shift over one')
+                lohi, hilo = lohi[:-1], hilo[1:]
+                assert len(lohi) == len(hilo), 'did not help'
+            else:
+                assert False, "should not happen!"
+
+            mlen = max(len(lohi), len(hilo))
+            #log.debug('truncating to {:d}'.format(mlen))
+            lohi, hilo = lohi[:mlen], hilo[:mlen]
+
+        if lohi.shape[0] == 1:
+            s = 'only one complete dazzler table found. Are you sure' +\
+                    ' you integrated for long enough?'
+            #log.error(s)
+            raise RuntimeError(s)
+        else:
+            period = int(lohi[1] - lohi[0])
+
+        if not np.allclose(hilo-lohi, waveform_repeat) or \
+            not np.allclose(np.diff(lohi),  period):
+
+            s = 'detected incorrect repeat or a break in periodicity ' +\
+                'of the table. Check that the DAQ card cable is connected ' + \
+                'and dazzler synchronization is working correctly. ' + \
+                'Alternatively, check the waveform repeat setting. ' + \
+                'Waveform repeat is set to {:d}.'.format(waveform_repeat)
+
+            #log.error(s)
+            raise RuntimeError(s)
+            
+        # diff returns forward difference. Add one for actual peak position 
+        return np.squeeze(lohi)+1, period
+
+    def detect_shutter_index(self, spectral_data):
+        '''tries to determine a range in the camera frames that have the shutter on
+        or off'''
+
+        # throw away `transition_width` shots around the found position
+        transition_width = self.shutter_transition_width
+
+
+        avg_intensity = spectral_data.mean(dim='pixel')
+        nshots = len(avg_intensity)
+        shutter_start = int(np.abs(avg_intensity.diff(dim='laser_shot')).argmax())
+
+        #print('Duty cycle', shutter_start/nshots)
+        
+        assert all([shutter_start != 0, shutter_start != nshots-1]), \
+                'shutter start found at the beginning or the end of the trace'+\
+                '. This is probably horribly wrong.'
+
+        assert nshots > 2*transition_width, 'camera trace too short!'
+
+        nshots_probe_on = int(shutter_start - transition_width)
+        nshots_transition = int(2*transition_width)
+        nshots_probe_off = int(nshots - (shutter_start + transition_width))
+        return nshots_probe_on, nshots_transition, nshots_probe_off
 
 def test():
     paths = ['/Volumes/Seagate Expansion Drive/stark-project-raw-data/16-11-01/rc-tgs-batch00',
              '/Volumes/Seagate Expansion Drive/stark-project-raw-data/16-11-01/rc-tgs-batch01']
-    a = BatchLoader(paths[0])
+    a = BatchLoader(paths[1])
     b = DataChunkLoader()
     b.trim_to = slice(10, None)
-    b.phase_cycles = PhaseCycles['TGESS']
-    b.nwaveforms = 1
-    b.nrepeat = 1
+    c = PhaseCycler()
+    c.phase_cycles = PhaseCycles['TGESS']
+    c.nwaveforms = 1
+    c.nrepeat = 1
+    
     pool = Pool(8)
     pstarmap = toolz.curry(pool.starmap)
     
-    pipeline = rcompose(a, curry(toolz.take)(101), pstarmap(b))
+    pipeline = rcompose(a, curry(toolz.take)(161), pstarmap(b), map(c))
     res = list(pipeline())
-    print(res)
-    #print(xr.concat(res, dim='t2_index'))
+    #print(res)
 
+    return res
 
 if __name__ == '__main__':
-    test()
+    import timeit
+    print(timeit.timeit("test()", setup="from __main__ import test", number=1))
 
 '''
 class WorkerMetaClass(type):
