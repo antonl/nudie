@@ -175,8 +175,10 @@ def apply_phase_2d(dd_file, correction_multiplier, correction_offset, **kwargs):
 
         # trying frank's method of phase-locking axis FIXME!!!!
         # this is due to a sign error in the Dazzler code 
+        # Note: This is now fixed. Bug was due to one extra fftshift
         C = nudie.spectrometer.speed_of_light
-        f1_pl = f1 + C/(2*central_wl - phaselock_wl)
+        #f1_pl = f1 + C/(2*central_wl - phaselock_wl)
+        f1_pl = f1 + C/phaselock_wl
 
         f1_ax_pl = sf['axes'].require_dataset('phase-locked excitation frequency',
             shape=f1.shape, dtype=float)
@@ -188,14 +190,18 @@ def apply_phase_2d(dd_file, correction_multiplier, correction_offset, **kwargs):
             spectra_shape = (sf.attrs['nt2'], f1.shape[0], dd_f.shape[0])
 
         # zero pad data and flip axes
+        # properly combine the rephasing and nonrephasing
+        roll_by = 1 if excitation_axis_pad_to % 2 == 0 else 0
+
         if stark:
-            Rw1 = np.fft.fft(R, axis=2, n=excitation_axis_pad_to)
-            NRw1 = np.fft.fft(NR, axis=2, n=excitation_axis_pad_to)
-            Sw1 = np.fft.fftshift(0.5*(Rw1[:, :, ::-1] + NRw1), axes=(2,))
+            Rw1 = np.fft.fftshift(np.fft.fft(R, axis=2, n=excitation_axis_pad_to), axes=2)
+            NRw1 = np.fft.fftshift(np.fft.fft(NR, axis=2, n=excitation_axis_pad_to), axes=2)
+
+            Sw1 = 0.5*(np.roll(Rw1[:, :, ::-1], shift=roll_by, axis=2) + NRw1)
         else:
-            Rw1 = np.fft.fft(R, axis=1, n=excitation_axis_pad_to)
-            NRw1 = np.fft.fft(NR, axis=1, n=excitation_axis_pad_to)
-            Sw1 = np.fft.fftshift(0.5*(Rw1[:, ::-1] + NRw1), axes=(1,))
+            Rw1 = np.fft.fftshift(np.fft.fft(R, axis=1, n=excitation_axis_pad_to), axes=1)
+            NRw1 = np.fft.fftshift(np.fft.fft(NR, axis=1, n=excitation_axis_pad_to), axes=1)
+            Sw1 = 0.5*(np.roll(Rw1[:, ::-1], shift=roll_by, axis=1) + NRw1)
 
         phased_Rw1 = correction_multiplier*Rw1 + correction_offset
         r = sf.require_dataset('phased rephasing', shape=spectra_shape,
@@ -234,23 +240,6 @@ def apply_phase_2d(dd_file, correction_multiplier, correction_offset, **kwargs):
                 x.dims[1].attach_scale(f1_ax_pl)
                 x.dims[2].label = 'detection frequency'
                 x.dims[2].attach_scale(sf['axes/detection frequency'])
-
-        if plot:
-            if stark:
-                mpl.figure()
-                mpl.contourf(f1_pl, sf['axes/detection frequency'], 
-                    np.rot90(np.real(phased_2D[0][0] - phased_2D[0][1]), -1), 50)
-                mpl.colorbar()
-                mpl.figure()
-                mpl.contourf(f1_pl, sf['axes/detection frequency'], 
-                    np.rot90(np.real(phased_2D[0][1]), -1), 50)
-                mpl.colorbar()
-                mpl.show()
-            else:
-                mpl.contourf(f1_pl, sf['axes/detection frequency'], 
-                    np.rot90(np.real(phased_2D[0]), -1), 50)
-                mpl.colorbar()
-                mpl.show()
 
 experiment_map = {
     'transient-grating': (apply_phase_tg, {}), 

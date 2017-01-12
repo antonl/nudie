@@ -13,7 +13,7 @@ try:
     from .. import mount_point, data_folder
 except ImportError as e:
     log.warning('could not load `data_folder` path.' +
-            'Remember to set a default for these functions')
+            'Remember to set a default for these folders')
     data_folder = None
 
 from .. import SpeFile

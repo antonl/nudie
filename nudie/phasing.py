@@ -215,10 +215,11 @@ def run(path, pp_name, pp_batch, dd_name, dd_batch, plot=False, force=False,
         f1_ax = sf['axes'].require_dataset('raw excitation frequency', 
             shape=f1.shape, dtype=float, data=f1)
 
-        # trying frank's method of phase-locking axis FIXME!!!!
-        # this is due to a sign error in the Dazzler code 
+        # trying frank's method of phase-locking axis
+        # this is due to a sign error in the Dazzler code
+        # Note: This is now fixed. Bug was due to one extra fftshift
         C = nudie.spectrometer.speed_of_light
-        f1_pl = f1 + C/(2*central_wl - phaselock_wl)
+        f1_pl = f1 + C/phaselock_wl
 
         f1_ax_pl = sf['axes'].require_dataset('phase-locked excitation frequency',
             shape=f1.shape, dtype=float, data=f1_pl)
@@ -226,19 +227,24 @@ def run(path, pp_name, pp_batch, dd_name, dd_batch, plot=False, force=False,
         spectra_shape = (sf.attrs['nt2'], f1.shape[0], dd_f.shape[0])
 
         # zero pad data and flip axes
-        Rw1 = np.fft.fft(R, axis=1, n=pad_to)
+        Rw1 = np.fft.fftshift(np.fft.fft(R, axis=1, n=pad_to), axes=1)
         phased_Rw1 = correction_multiplier*Rw1 + correction_offset
         r = sf.require_dataset('phased rephasing', shape=spectra_shape,
                 dtype=complex, data=phased_Rw1) 
         del R, phased_Rw1
 
-        NRw1 = np.fft.fft(NR, axis=1, n=pad_to)
+        NRw1 = np.fft.fftshift(np.fft.fft(NR, axis=1, n=pad_to), axes=1)
         phased_NRw1 = correction_multiplier*NRw1 + correction_offset
         nr = sf.require_dataset('phased non-rephasing', shape=spectra_shape,
                 dtype=complex, data=phased_NRw1) 
         del NR, phased_NRw1
 
-        Sw1 = np.fft.fftshift(0.5*(Rw1[:, ::-1] + NRw1), axes=1)
+        # properly combine the rephasing and nonrephasing
+        roll_by = 1 if pad_to % 2 == 0 else 0
+
+        Sw1 = 0.5*(np.roll(Rw1[:, ::-1], shift=roll_by, axis=1) + NRw1)
+        # note: Sw1 has essentially already been fftshift-ed because Rw1 and NRw1 already are
+
         phased_2D = correction_multiplier*Sw1 + correction_offset
         dd = sf.require_dataset('phased 2D', shape=spectra_shape, 
                 dtype=complex, data=phased_2D)
@@ -268,11 +274,6 @@ def run(path, pp_name, pp_batch, dd_name, dd_batch, plot=False, force=False,
         sf.attrs['phased'] = True
         sf.attrs['phasing timestamp'] = arrow.now().format('DD-MM-YYYY HH:mm')
         sf.attrs['nudie version'] = nudie.version
-
-        if plot:
-            mpl.contourf(f1_pl, sf['axes/detection frequency'], 
-                np.rot90(np.real(phased_2D[0]), -1), 50)
-            mpl.show()
 
         del phased_2D
 

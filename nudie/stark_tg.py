@@ -348,7 +348,8 @@ def main(config, verbosity=nudie.logging.INFO):
             dc_width=val['dc width'],
             gaussian_power=val['gaussian power'],
             analysis_path=val['analysis path'],
-            min_field=val['field on threshold'])
+            min_field=val['field on threshold'],
+            datapath=val['data path'])
     except Exception as e:
         nudie.log.exception(e)
 

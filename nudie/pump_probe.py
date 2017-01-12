@@ -30,7 +30,7 @@ def load_wavelengths(path):
     return wl
 
 def run(pp_name, pp_batch, when='today', wavelengths=None, plot=False,
-        exclude=[], analysis_path='analyzed'):
+        exclude=[], analysis_path='analyzed', datapath=None):
     '''run the batch job to analyze pump-probe data
     
     Performs a shot-to-shot pump-probe analysis. 
@@ -45,8 +45,12 @@ def run(pp_name, pp_batch, when='today', wavelengths=None, plot=False,
     nwaveforms = 1 # number of dazzler waveforms in pump probe is 1
     npixels = 1340 # length of detection axis
 
+    # change datapath
+    if datapath is None:
+        datapath = nudie.data_folder
+
     # load up pp data to use
-    pp_info = next(nudie.load_job(job_name=pp_name, batch_set=[pp_batch], when=when))
+    pp_info = next(nudie.load_job(job_name=pp_name, batch_set=[pp_batch], when=when, data_path=datapath))
 
     # set current batch directory
     current_path = Path(pp_info['batch_path'])
@@ -205,7 +209,9 @@ def main(config, verbosity=nudie.logging.INFO):
         run(pp_name=val['jobname'], pp_batch=val['batch'],
                 when=val['when'], plot=val['plot'],
                 wavelengths=val['wavelengths'],
-                exclude=val['exclude'], analysis_path=val['analysis path'])
+                exclude=val['exclude'], analysis_path=val['analysis path'],
+                datapath=val['data path'])
+
     except Exception as e:
         nudie.log.exception(e)
 

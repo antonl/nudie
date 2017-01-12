@@ -52,15 +52,19 @@ def run(dd_name, dd_batch, when='today', wavelengths=None, plot=False,
         central_wl=None, phaselock_wl=None, pad_to=2048,
         waveforms_per_table=40, prd_est=850., lo_width=200, dc_width=200, 
         gaussian_power=2,
-        analysis_path='./analyzed', min_field=0.2, detrend_t1=False):
+        analysis_path='./analyzed', min_field=0.2, detrend_t1=False, datapath=None):
 
     nrepeat = 1 # how many times each waveform is repeated in the camera file. Assumed to be one
     nstark = 2
     npixels = 1340
     trim_to = 3, -3
 
+    # change datapath
+    if datapath is None:
+        datapath = nudie.data_folder
+
     # load up 2d data to use
-    dd_info = next(nudie.load_job(job_name=dd_name, batch_set=[dd_batch], when=when))
+    dd_info = next(nudie.load_job(job_name=dd_name, batch_set=[dd_batch], when=when, data_path=datapath))
     phase_cycles = [(0., 0.), (1., 1.), (0, 0.6), (1., 1.6), (0, 1.3), (1., 2.3)]
 
     # set current batch directory
@@ -101,8 +105,8 @@ def run(dd_name, dd_batch, when='today', wavelengths=None, plot=False,
 
     ## Make phase-cycling coefficient matrix
     # subspaces
-    sub1 = np.array([[np.exp(1j*np.pi*(y - x)), np.exp(-1j*np.pi*(y - x)), 1] for x,y in phase_cycles[0::2]])
-    sub2 = np.array([[np.exp(1j*np.pi*(y - x)), np.exp(-1j*np.pi*(y - x)), 1] for x,y in phase_cycles[1::2]])
+    sub1 = np.array([[np.exp(1j*np.pi*(x - y)), np.exp(-1j*np.pi*(x - y)), 1] for x,y in phase_cycles[0::2]])
+    sub2 = np.array([[np.exp(1j*np.pi*(x - y)), np.exp(-1j*np.pi*(x - y)), 1] for x,y in phase_cycles[1::2]])
 
     perm = np.array([[1, 0, 0, 0, 0, 0],
                      [0, 0, 0, 1, 0, 0],
@@ -350,7 +354,8 @@ def main(config, verbosity=nudie.logging.INFO):
                 gaussian_power=val['gaussian power'],
                 analysis_path=val['analysis path'],
                 min_field=val['field on threshold'],
-                detrend_t1=val['detrend t1'])
+                detrend_t1=val['detrend t1'],
+                datapath=val['data path'])
     except Exception as e:
         nudie.log.exception(e)
 

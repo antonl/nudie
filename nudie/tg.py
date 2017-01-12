@@ -259,7 +259,8 @@ def main(config, verbosity=nudie.logging.INFO):
             lo_width=val['lo width'],
             dc_width=val['dc width'],
             gaussian_power=val['gaussian power'],
-            analysis_path=val['analysis path'])
+            analysis_path=val['analysis path'],
+            datapath=val['data path'])
     except Exception as e:
         nudie.log.exception(e)
 

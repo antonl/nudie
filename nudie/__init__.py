@@ -24,11 +24,15 @@ from .utils.analysis_bits import tag_phases, cleanup_analogtxt, \
     make_6phase_cycler, select_prd_peak, remove_incomplete_t1_waveforms
 
 from .schema import parse_config
+from pathlib import Path
 
 try:
     mount_point, data_folder = setup_paths()
 except RuntimeError as e:
     pass
+finally:
+    mount_point = Path('.')
+    data_folder = Path('.')
 
 # this must be loaded after setup_paths is run
 from .utils.batch_loader import load_job

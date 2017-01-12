@@ -424,16 +424,28 @@ def test():
     
     pool = Pool(8)
     pstarmap = toolz.curry(pool.starmap)
+    pmap = toolz.curry(pool.map)
     
-    pipeline = rcompose(a, curry(toolz.take)(161), pstarmap(b), map(c))
+    pipeline = rcompose(a, curry(toolz.take)(1), pstarmap(b), map(c))
     res = list(pipeline())
     #print(res)
+    
+    import matplotlib.pyplot as plt
 
-    return res
+    print(res[0].sel(laser_shot={'shutter_label':'transition'}))
+    
+    tmp = res[0]['spectrometer_data'].sel(laser_shot={'shutter_label':'transition'})
+    tmp2 = tmp.assign_coords(laser_shot=range(10))
+    tmp2.plot()
+    plt.show()
+    
+
 
 if __name__ == '__main__':
-    import timeit
-    print(timeit.timeit("test()", setup="from __main__ import test", number=1))
+    #import timeit
+    #print(timeit.timeit("test()", setup="from __main__ import test", number=1))
+
+    test()
 
 '''
 class WorkerMetaClass(type):

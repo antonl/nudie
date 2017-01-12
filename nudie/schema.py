@@ -73,6 +73,7 @@ schema_pp = Schema({
     Required('when'): str, # probably should validate to a valid date
     Required('wavelengths'): str,
     Required('analysis path'): str,
+    Required('data path'): str,
     Optional('plot'): Coerce(BoolStr),
     Optional('exclude'): Coerce(IntList),
     }, extra=REMOVE_EXTRA)
@@ -83,6 +84,7 @@ schema_2d = Schema({
     Required('when'): str, # probably should validate to a valid date
     Required('wavelengths'): str,
     Required('analysis path'): str,
+    Required('data path'): str,
     Optional('waveforms per table'): Coerce(int),
     Optional('central wl'): Coerce(float),
     Optional('phaselock wl'): Coerce(float),
@@ -105,6 +107,7 @@ schema_tg = Schema({
     Required('when'): str, # probably should validate to a valid date
     Required('wavelengths'): str,
     Required('analysis path'): str,
+    Required('data path'): str,
     Optional('plot'): Coerce(BoolStr),
     Optional('force'): Coerce(BoolStr),
     Optional('stark'): Coerce(BoolStr),

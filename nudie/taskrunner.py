@@ -1,6 +1,6 @@
 import sys
+from qtpy import QtGui, QtCore, QtWidgets
 import nudie
-from PyQt4 import QtGui, QtCore
 import multiprocessing
 from pathlib import Path
 
@@ -12,9 +12,9 @@ from nudie.phasing import main as phasing_main
 from nudie.apply_phase import main as apply_phase_main
 from nudie.stark_dd import main as stark_dd_main
 
-class MainWindow(QtGui.QMainWindow):
+class MainWindow(QtWidgets.QMainWindow):
     def __init__(self, *args, **kwargs):
-        QtGui.QMainWindow.__init__(self, *args, **kwargs)
+        QtWidgets.QMainWindow.__init__(self, *args, **kwargs)
         
         self.setWindowTitle('Nudie Task Runner')
         self.create_main_frame()
@@ -23,30 +23,30 @@ class MainWindow(QtGui.QMainWindow):
         self.workers = ctx.Pool(5)
 
     def create_main_frame(self):
-        self.main_frame = QtGui.QWidget()
+        self.main_frame = QtWidgets.QWidget()
         
         s = 'Select a configuration file and then push a button to start an ' +\
             'analysis.'
-        inst_lb = QtGui.QLabel(s)
+        inst_lb = QtWidgets.QLabel(s)
 
-        config_group = QtGui.QGroupBox("Configuration file")
-        config_layout = QtGui.QHBoxLayout()
-        self.config_lb = QtGui.QLabel()
-        config_btn = QtGui.QPushButton("Choose file")
+        config_group = QtWidgets.QGroupBox("Configuration file")
+        config_layout = QtWidgets.QHBoxLayout()
+        self.config_lb = QtWidgets.QLabel()
+        config_btn = QtWidgets.QPushButton("Choose file")
         config_btn.clicked.connect(self.on_choose_file)
         config_layout.addWidget(self.config_lb)
         config_layout.addWidget(config_btn)
         config_group.setLayout(config_layout)
 
-        exp_group = QtGui.QGroupBox("Experiments")
-        exp_layout = QtGui.QHBoxLayout()
-        self.pp_btn = QtGui.QPushButton("Pump Probe")
+        exp_group = QtWidgets.QGroupBox("Experiments")
+        exp_layout = QtWidgets.QHBoxLayout()
+        self.pp_btn = QtWidgets.QPushButton("Pump Probe")
         self.pp_btn.clicked.connect(self.on_pump_probe)
-        self.tg_btn = QtGui.QPushButton("Transient Grating")
+        self.tg_btn = QtWidgets.QPushButton("Transient Grating")
         self.tg_btn.clicked.connect(self.on_tg)
-        self.dd_btn = QtGui.QPushButton("2D")
+        self.dd_btn = QtWidgets.QPushButton("2D")
         self.dd_btn.clicked.connect(self.on_dd)
-        self.stark_chk = QtGui.QCheckBox("Stark")
+        self.stark_chk = QtWidgets.QCheckBox("Stark")
         self.stark_chk.setChecked(False)
         self.stark_chk.stateChanged.connect(self.on_stark_check)
 
@@ -56,11 +56,11 @@ class MainWindow(QtGui.QMainWindow):
             exp_layout.setStretchFactor(x, 1)
         exp_group.setLayout(exp_layout)
 
-        phasing_group = QtGui.QGroupBox("Phasing and such")
-        phasing_layout = QtGui.QHBoxLayout()
-        self.phasing_btn = QtGui.QPushButton("Phasing")
+        phasing_group = QtWidgets.QGroupBox("Phasing and such")
+        phasing_layout = QtWidgets.QHBoxLayout()
+        self.phasing_btn = QtWidgets.QPushButton("Phasing")
         self.phasing_btn.clicked.connect(self.on_phasing)
-        self.applyphase_btn = QtGui.QPushButton("Apply Phase")
+        self.applyphase_btn = QtWidgets.QPushButton("Apply Phase")
         self.applyphase_btn.clicked.connect(self.on_apply_phase)
 
         for x in [self.phasing_btn, self.applyphase_btn]:
@@ -68,7 +68,7 @@ class MainWindow(QtGui.QMainWindow):
         phasing_layout.addStretch(1)
         phasing_group.setLayout(phasing_layout)
 
-        vbox = QtGui.QVBoxLayout()
+        vbox = QtWidgets.QVBoxLayout()
         for x in [inst_lb, config_group, exp_group, phasing_group]:
             vbox.addWidget(x)
         self.main_frame.setLayout(vbox)
@@ -89,13 +89,12 @@ class MainWindow(QtGui.QMainWindow):
 
     def on_choose_file(self):
         try:
-            file = QtGui.QFileDialog.getOpenFileName(self, "Open cfg file", 
-                    "", "Nudie config files (*.cfg)") 
+            file, ftype = QtWidgets.QFileDialog.getOpenFileName(self, "Open cfg file", "", "Nudie config files (*.cfg)")
             self.config = Path(file)
             self.config_lb.setText(str(self.config.relative_to(
                 self.config.cwd())))
         except Exception as e:
-            QtGui.QMessageBox.critical(self, "Exception occured", str(e))
+            QtWidgets.QMessageBox.critical(self, "Exception occured", str(e))
 
     def on_pump_probe(self):
         self.pp_btn.setEnabled(False)
@@ -164,7 +163,7 @@ class MainWindow(QtGui.QMainWindow):
 
 def run():
     try:
-        app = QtGui.QApplication(sys.argv)
+        app = QtWidgets.QApplication(sys.argv)
         main = MainWindow()
         main.show()
         app.exec_()
