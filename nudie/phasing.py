@@ -226,14 +226,21 @@ def run(path, pp_name, pp_batch, dd_name, dd_batch, plot=False, force=False,
 
         spectra_shape = (sf.attrs['nt2'], f1.shape[0], dd_f.shape[0])
 
+        # Window the raw data to avoid wings
+        t1_len = t1.shape[0]
+        window_sym = get_window(('tukey', 0.3), 2*t1_len, fftbins=True)
+        window_sym[t1_len] = 0.5
+        window = window_sym[t1_len:]
+        window_func = lambda x: np.einsum('ijk,j->ijk', x, window)
+
         # zero pad data and flip axes
-        Rw1 = np.fft.fftshift(np.fft.fft(R, axis=1, n=pad_to), axes=1)
+        Rw1 = np.fft.fftshift(np.fft.fft(window_func(R), axis=1, n=pad_to), axes=1)
         phased_Rw1 = correction_multiplier*Rw1 + correction_offset
         r = sf.require_dataset('phased rephasing', shape=spectra_shape,
                 dtype=complex, data=phased_Rw1) 
         del R, phased_Rw1
 
-        NRw1 = np.fft.fftshift(np.fft.fft(NR, axis=1, n=pad_to), axes=1)
+        NRw1 = np.fft.fftshift(np.fft.fft(window_func(NR), axis=1, n=pad_to), axes=1)
         phased_NRw1 = correction_multiplier*NRw1 + correction_offset
         nr = sf.require_dataset('phased non-rephasing', shape=spectra_shape,
                 dtype=complex, data=phased_NRw1) 

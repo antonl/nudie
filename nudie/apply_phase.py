@@ -193,14 +193,25 @@ def apply_phase_2d(dd_file, correction_multiplier, correction_offset, **kwargs):
         # properly combine the rephasing and nonrephasing
         roll_by = 1 if excitation_axis_pad_to % 2 == 0 else 0
 
+        t1_len = t1.shape[0]
+        window_sym = get_window(('tukey', 0.3), 2*t1_len, fftbins=True)
+        window_sym[t1_len] = 0.5
+        window = window_sym[t1_len:]
+
         if stark:
-            Rw1 = np.fft.fftshift(np.fft.fft(R, axis=2, n=excitation_axis_pad_to), axes=2)
-            NRw1 = np.fft.fftshift(np.fft.fft(NR, axis=2, n=excitation_axis_pad_to), axes=2)
+            window_func = lambda x: np.einsum('ijkl,k->ijkl', x, window)
+            diagnostic_R = window_func(R)
+            diagnostic_NR = window_func(NR)
+            Rw1 = np.fft.fftshift(np.fft.fft(diagnostic_R, axis=2, n=excitation_axis_pad_to), axes=2)
+            NRw1 = np.fft.fftshift(np.fft.fft(diagnostic_NR, axis=2, n=excitation_axis_pad_to), axes=2)
 
             Sw1 = 0.5*(np.roll(Rw1[:, :, ::-1], shift=roll_by, axis=2) + NRw1)
         else:
-            Rw1 = np.fft.fftshift(np.fft.fft(R, axis=1, n=excitation_axis_pad_to), axes=1)
-            NRw1 = np.fft.fftshift(np.fft.fft(NR, axis=1, n=excitation_axis_pad_to), axes=1)
+            window_func = lambda x: np.einsum('ijk,j->ijk', x, window)
+            diagnostic_R = window_func(R)
+            diagnostic_NR = window_func(NR)
+            Rw1 = np.fft.fftshift(np.fft.fft(diagnostic_R, axis=1, n=excitation_axis_pad_to), axes=1)
+            NRw1 = np.fft.fftshift(np.fft.fft(diagnostic_NR, axis=1, n=excitation_axis_pad_to), axes=1)
             Sw1 = 0.5*(np.roll(Rw1[:, ::-1], shift=roll_by, axis=1) + NRw1)
 
         phased_Rw1 = correction_multiplier*Rw1 + correction_offset
@@ -214,6 +225,16 @@ def apply_phase_2d(dd_file, correction_multiplier, correction_offset, **kwargs):
         phased_2D = correction_multiplier*Sw1 + correction_offset
         dd = sf.require_dataset('phased 2D', shape=spectra_shape, 
                 dtype=complex, data=phased_2D)
+
+        # add diagnostic rephasing and nonrephasing dsets
+        sf.require_dataset('windowed raw rephasing', shape=R.shape,
+                               dtype=complex, data=correction_multiplier*diagnostic_R + correction_offset)
+        sf.require_dataset('windowed raw non-rephasing', shape=NR.shape,
+                               dtype=complex, data=correction_multiplier*diagnostic_NR + correction_offset)
+        sf.require_dataset('phased raw rephasing', shape=R.shape,
+                           dtype=complex, data=correction_multiplier*R + correction_offset)
+        sf.require_dataset('phased raw non-rephasing', shape=NR.shape,
+                           dtype=complex, data=correction_multiplier*NR + correction_offset)
 
         sf.attrs['phase lock wavelength'] = phaselock_wl 
         sf.attrs['central wavelength'] = central_wl 
