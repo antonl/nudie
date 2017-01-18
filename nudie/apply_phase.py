@@ -194,7 +194,7 @@ def apply_phase_2d(dd_file, correction_multiplier, correction_offset, **kwargs):
         roll_by = 1 if excitation_axis_pad_to % 2 == 0 else 0
 
         t1_len = t1.shape[0]
-        window_sym = get_window(('tukey', 0.3), 2*t1_len, fftbins=True)
+        window_sym = get_window(('kaiser', 8.0), 2*t1_len, fftbins=True)
         window_sym[t1_len] = 0.5
         window = window_sym[t1_len:]
 

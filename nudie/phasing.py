@@ -228,7 +228,7 @@ def run(path, pp_name, pp_batch, dd_name, dd_batch, plot=False, force=False,
 
         # Window the raw data to avoid wings
         t1_len = t1.shape[0]
-        window_sym = get_window(('tukey', 0.3), 2*t1_len, fftbins=True)
+        window_sym = get_window(('kaiser', 8.0), 2*t1_len, fftbins=True)
         window_sym[t1_len] = 0.5
         window = window_sym[t1_len:]
         window_func = lambda x: np.einsum('ijk,j->ijk', x, window)
