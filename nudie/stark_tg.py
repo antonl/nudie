@@ -30,10 +30,10 @@ def plot_windows(t, lo_window, dc_window, fft, prd_est):
     import matplotlib.pylab as mpl
 
     idx = np.argmin(abs(t - prd_est))
-    
+
     # we will only plot the absolute value of the FFT
     fft = np.abs(fft)/np.abs(fft[idx])
-    
+
     mpl.plot(t, fft)
     mpl.plot(t, lo_window, linewidth=3)
     mpl.plot(t, dc_window, linewidth=3)
@@ -45,15 +45,20 @@ def plot_phasing_tg(f, tg):
     mpl.plot(f, abs(tg))
     mpl.show()
 
-def run(tg_name, tg_batch, when='today', wavelengths=None, plot=False, 
+def run(tg_name, tg_batch, when='today', wavelengths=None, plot=False,
         pad_to=2048, prd_est=850., lo_width=200, dc_width=200,
-        gaussian_power=2., analysis_path='./analyzed', min_field=0.2):
+        gaussian_power=2., analysis_path='./analyzed', min_field=0.2,
+        datapath=None):
 
     if plot:
         import matplotlib as mpl
         import matplotlib.pyplot as plt
         mpl.rcParams['figure.figsize'] = (16,12)
         mpl.use('Qt4Agg')
+
+    # change datapath
+    if datapath is None:
+        datapath = nudie.data_folder
 
     nrepeat = 1 # how many times each waveform is repeated in the camera file. Assumed to be one
     waveforms_per_table = 1
@@ -62,8 +67,9 @@ def run(tg_name, tg_batch, when='today', wavelengths=None, plot=False,
     nstark = 2 # number of stark items
 
     # load up tg data to use
-    tg_info = next(nudie.load_job(job_name=tg_name, batch_set=[tg_batch], when=when))
-    
+    tg_info = next(nudie.load_job(job_name=tg_name, batch_set=[tg_batch],
+                                  when=when, data_path=datapath))
+
     phase_cycles = ['none1', 'zero', 'none2', 'pipi']
 
     # set current batch directory
@@ -77,7 +83,7 @@ def run(tg_name, tg_batch, when='today', wavelengths=None, plot=False,
         analysis_folder.mkdir(parents=True)
 
     save_path = analysis_folder / (tg_info['batch_name'] + '.h5')
-    
+
     # remove data file if it exists
     if save_path.exists(): save_path.unlink()
 
@@ -95,11 +101,11 @@ def run(tg_name, tg_batch, when='today', wavelengths=None, plot=False,
         raise e
 
     # define gaussian
-    def gaussian2(w, x0, x):    
+    def gaussian2(w, x0, x):
         c = 4*np.log(2)
         ξ = x-x0
         return np.exp(-c*(ξ/w)**(2*gaussian_power))
-    
+
     for loop, t2, table in it.product(tg_info['loop_range'], tg_info['t2_range'],
             tg_info['table_range']):
 
@@ -110,11 +116,11 @@ def run(tg_name, tg_batch, when='today', wavelengths=None, plot=False,
         # first file requires special synchronization
         # this is the rule that determines that it is the first file
         first = 'first' if all([t2 == 0, table == 0, loop == 0]) else False
-        
+
         # Load everything for the given t2, table, and loop value
         analogs = nudie.load_analogtxt(tg_info['job_name'], current_path, t2, table, loop)
         cdata = nudie.load_camera_file(tg_info['job_name'], current_path, t2, table, loop, force_uint16=True)
-        
+
         # Synchronize it, trimming some frames in the beginning and end
         data, (a1, a2) = nudie.trim_all(*nudie.synchronize_daq_to_camera(\
             cdata, analog_channels=analogs, which_file=first),
@@ -122,14 +128,14 @@ def run(tg_name, tg_batch, when='today', wavelengths=None, plot=False,
         data = data.astype(float) # convert to float64 before manipulating it!
 
         start_idxs, period = nudie.detect_table_start(a1)
-        
+
         f, data, df = nudie.wavelen_to_freq(wl, data, ret_df=True, ax=0)
-        
-        # determine where the shutter is  
+
+        # determine where the shutter is
         shutter_open, shutter_closed, duty_cycle = nudie.determine_shutter_shots(data)
-        
+
         # tag the phases
-        shutter_info = {'last open idx': shutter_open, 'first closed idx': shutter_closed}                
+        shutter_info = {'last open idx': shutter_open, 'first closed idx': shutter_closed}
         tags = nudie.tag_phases(start_idxs, period, tags=phase_cycles, nframes=data.shape[1], shutter_info=shutter_info)
         nudie.remove_incomplete_t1_waveforms(tags, phase_cycles)
         data_t = np.zeros((data.shape[1], data.shape[0]), dtype=float)
@@ -143,28 +149,28 @@ def run(tg_name, tg_batch, when='today', wavelengths=None, plot=False,
             # Offset 0, every second frame has high field
             ao = a2[idx_open][0::2] > min_field
             # Offset 0, every second frame has low field
-            bo = a2[idx_open][0::2] <= min_field 
-            
+            bo = a2[idx_open][0::2] <= min_field
+
             # Offset 1, every second frame has high field
             co = a2[idx_open][1::2] > min_field
             # Offset 1, every second frame has low field
             do = a2[idx_open][1::2] <= min_field
-            
+
             # Offset 0, every second frame has high field
             ac = a2[idx_closed][0::2] > min_field
             # Offset 0, every second frame has low field
-            bc = a2[idx_closed][0::2] <= min_field 
-            
+            bc = a2[idx_closed][0::2] <= min_field
+
             # Offset 1, every second frame has high field
             cc = a2[idx_closed][1::2] > min_field
             # Offset 1, every second frame has low field
             dc = a2[idx_closed][1::2] <= min_field
-            
+
             assert np.logical_xor(np.all(ao), np.all(bo)), \
                 'detected stark synchronization error, offset 0, phase %s' % str(k)
             assert np.logical_xor(np.all(co), np.all(do)), \
                 'detected stark synchronization error, offset 1, phase %s' % str(k)
-            
+
             assert np.logical_xor(np.all(ac), np.all(bc)), \
                 'detected stark synchronization error, offset 0, phase %s' % str(k)
             assert np.logical_xor(np.all(cc), np.all(dc)), \
@@ -185,15 +191,15 @@ def run(tg_name, tg_batch, when='today', wavelengths=None, plot=False,
             idx_closed = tags[nrepeat-1][t1][k]['shutter closed']
 
             so = np.intersect1d(idx_open, stark_idx, assume_unique=True)
-            sc = np.intersect1d(idx_closed, stark_idx, assume_unique=True)                   
+            sc = np.intersect1d(idx_closed, stark_idx, assume_unique=True)
 
             no = np.intersect1d(idx_open, nostark_idx, assume_unique=True)
-            nc = np.intersect1d(idx_closed, nostark_idx, assume_unique=True)                   
+            nc = np.intersect1d(idx_closed, nostark_idx, assume_unique=True)
 
             data_t[so, :] = (data[:, so].T - data[:, sc].mean(axis=1))
             data_t[no, :] = (data[:, no].T - data[:, nc].mean(axis=1))
-        
-        t = np.fft.fftfreq(pad_to, df) 
+
+        t = np.fft.fftfreq(pad_to, df)
         lo_window = gaussian2(lo_width, prd_est, t)
         dc_window = gaussian2(dc_width, 0, t)
 
@@ -203,11 +209,11 @@ def run(tg_name, tg_batch, when='today', wavelengths=None, plot=False,
         if all([plot, table==0, t2==0]):
             tmp_fft = fdata[tags[0][0][phase_cycles[1]]['shutter open'][0], :]
             plot_windows(t, lo_window, dc_window, tmp_fft, prd_est)
-        
+
         # spectral interferometry
         rIprobe = np.fft.ifft(fdata*dc_window, axis=1)[:, :npixels]
         rIlo = np.fft.ifft(fdata*lo_window, axis=1)[:, :npixels]
-        
+
         rEprobe = np.sqrt(np.abs(rIprobe))
 
         '''
@@ -277,11 +283,13 @@ def run(tg_name, tg_batch, when='today', wavelengths=None, plot=False,
 
         with h5py.File(str(save_path), 'a') as sf:
             # save data at current t2
-            
+
             # for some reason, I need -1j now -> 1j to make the real part the
             # absorptive and -1 to do the 2D convention
-            sf['raw transient-grating'][t2, 0] = -1j*sTG 
-            sf['raw transient-grating'][t2, 1] = -1j*nTG
+            #sf['raw transient-grating'][t2, 0] = -1j*sTG
+            #sf['raw transient-grating'][t2, 1] = -1j*nTG
+            sf['raw transient-grating'][t2, 0] = sTG
+            sf['raw transient-grating'][t2, 1] = nTG
 
     with h5py.File(str(save_path), 'a') as sf:
         # write out meta data
@@ -297,7 +305,7 @@ def run(tg_name, tg_batch, when='today', wavelengths=None, plot=False,
         sf.attrs['analysis timestamp'] = arrow.now().format('DD-MM-YYYY HH:mm')
         sf.attrs['nudie version'] = nudie.version
         sf.attrs['experiment type'] = 'stark transient-grating'
-        
+
         # write out axes
         gaxes = sf.require_group('axes')
         gaxes.create_dataset('stark axis', data=stark_axis)
@@ -337,13 +345,13 @@ def main(config, verbosity=nudie.logging.INFO):
             nudie.log.error(s)
             return
 
-        run(tg_name=val['jobname'], 
-            tg_batch=val['batch'], 
+        run(tg_name=val['jobname'],
+            tg_batch=val['batch'],
             when=val['when'],
             wavelengths=val['wavelengths'],
             plot=val['plot'],
             pad_to=val['detection axis zero pad to'],
-            prd_est=val['probe ref delay'], 
+            prd_est=val['probe ref delay'],
             lo_width=val['lo width'],
             dc_width=val['dc width'],
             gaussian_power=val['gaussian power'],

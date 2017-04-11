@@ -29,23 +29,23 @@ def plot_phased_tg(t2, f3, tg, stark=False):
     vmax, vmin = np.max(res), np.min(res)
     ticker = mpl.mpl.ticker.MaxNLocator(nlevels)
     levels = ticker.tick_values(vmin, vmax)
-    #levels = levels[np.abs(levels) > levels_threshold] 
+    #levels = levels[np.abs(levels) > levels_threshold]
     xsection = res[800, :]
 
     midpoint = 1-vmax/(vmax+abs(vmin))
     cmap = shiftedColorMap(mpl.cm.RdBu_r, midpoint=midpoint)
-        
+
     fig = mpl.figure()
-    gs = mpl.GridSpec(2,2, height_ratios=[2,1], width_ratios=[5, 0.1]) 
+    gs = mpl.GridSpec(2,2, height_ratios=[2,1], width_ratios=[5, 0.1])
     ax1 = fig.add_subplot(gs[0, 0])
     ax2 = fig.add_subplot(gs[1, 0])
     ax3 = fig.add_subplot(gs[:, 1])
 
     ax1.contour(-t2, f3, res, 10, colors='k')
     cf = ax1.contourf(-t2, f3, res, levels=levels, cmap=cmap)
-        
+
     ax1.set_ylabel('detection frequency')
-    ax1.set_xlabel('t2 time')            
+    ax1.set_xlabel('t2 time')
     mpl.colorbar(cf, cax=ax3, use_gridspec=True)
 
     ax2.plot(-t2, xsection)
@@ -60,6 +60,7 @@ def apply_phase_tg(tg_file, correction_multiplier, correction_offset, **kwargs):
     force = kwargs.get('force', False)
     stark = kwargs.get('stark', False)
     plot = kwargs.get('plot', False)
+    phase_correct = kwargs.get('phase_correct', 0.0)
 
     with h5py.File(str(tg_file), 'a') as sf:
         # check that file is not already phased
@@ -72,7 +73,7 @@ def apply_phase_tg(tg_file, correction_multiplier, correction_offset, **kwargs):
 
         sf.require_dataset('correction multiplier',
                 shape=correction_multiplier.shape,
-                dtype=complex, data=correction_multiplier) 
+                dtype=complex, data=correction_multiplier)
         sf.require_dataset('correction offset', shape=(), dtype=float,
                 data=correction_offset)
         sf.attrs['copied phase'] = True
@@ -85,14 +86,16 @@ def apply_phase_tg(tg_file, correction_multiplier, correction_offset, **kwargs):
             spectra_shape = (sf.attrs['nt2'], nstark, TG.shape[2])
             phased_TG = correction_multiplier*TG + correction_offset
             tg = sf.require_dataset('phased transient-grating', shape=spectra_shape,
-                    dtype=complex, data=phased_TG) 
+                    dtype=complex)
+            tg[...] = phased_TG
         else:
             spectra_shape = (sf.attrs['nt2'], TG.shape[1])
 
             # is TG scaled the same way as the 2D? I don't think so...
             phased_TG = correction_multiplier*TG + correction_offset
             tg = sf.require_dataset('phased transient-grating', shape=spectra_shape,
-                    dtype=complex, data=phased_TG) 
+                    dtype=complex)
+            tg[...] = phased_TG
 
         for x in [tg,]:
             if stark:
@@ -126,6 +129,7 @@ def apply_phase_2d(dd_file, correction_multiplier, correction_offset, **kwargs):
     force = kwargs.get('force', False)
     stark = kwargs.get('stark', False)
     plot = kwargs.get('plot', False)
+    phase_correct = kwargs.get('phase_correct', 0.0)
 
     # load 2D data
     with h5py.File(str(dd_file), 'a') as sf:
@@ -139,7 +143,7 @@ def apply_phase_2d(dd_file, correction_multiplier, correction_offset, **kwargs):
 
         sf.require_dataset('correction multiplier',
                 shape=correction_multiplier.shape,
-                dtype=complex, data=correction_multiplier) 
+                dtype=complex, data=correction_multiplier)
         sf.require_dataset('correction offset', shape=(), dtype=float,
                 data=correction_offset)
         sf.attrs['copied phase'] = True
@@ -168,13 +172,13 @@ def apply_phase_2d(dd_file, correction_multiplier, correction_offset, **kwargs):
         t1 = sf['axes/t1']
         dt1 = abs(t1[1] - t1[0])
         f1 = np.fft.fftshift(np.fft.fftfreq(excitation_axis_pad_to, dt1))
-        
-        f1_ax = sf['axes'].require_dataset('raw excitation frequency', 
+
+        f1_ax = sf['axes'].require_dataset('raw excitation frequency',
             shape=f1.shape, dtype=float)
         f1_ax[:] = f1
 
         # trying frank's method of phase-locking axis FIXME!!!!
-        # this is due to a sign error in the Dazzler code 
+        # this is due to a sign error in the Dazzler code
         # Note: This is now fixed. Bug was due to one extra fftshift
         C = nudie.spectrometer.speed_of_light
         #f1_pl = f1 + C/(2*central_wl - phaselock_wl)
@@ -182,7 +186,7 @@ def apply_phase_2d(dd_file, correction_multiplier, correction_offset, **kwargs):
 
         f1_ax_pl = sf['axes'].require_dataset('phase-locked excitation frequency',
             shape=f1.shape, dtype=float)
-        f1_ax_pl[:] = f1_pl 
+        f1_ax_pl[:] = f1_pl
 
         if stark:
             spectra_shape = (sf.attrs['nt2'], sf.attrs['nstark'], f1.shape[0], dd_f.shape[0])
@@ -214,17 +218,27 @@ def apply_phase_2d(dd_file, correction_multiplier, correction_offset, **kwargs):
             NRw1 = np.fft.fftshift(np.fft.fft(diagnostic_NR, axis=1, n=excitation_axis_pad_to), axes=1)
             Sw1 = 0.5*(np.roll(Rw1[:, ::-1], shift=roll_by, axis=1) + NRw1)
 
-        phased_Rw1 = correction_multiplier*Rw1 + correction_offset
+        print('Applying phase correction ', phase_correct)
+        #phased_Rw1 = correction_multiplier*Rw1 + correction_offset
+        phased_Rw1 = correction_multiplier*Rw1*np.exp(1j*np.pi*phase_correct)\
+                     + correction_offset
         r = sf.require_dataset('phased rephasing', shape=spectra_shape,
-                dtype=complex, data=phased_Rw1) 
+                dtype=complex)
+        r[...] = phased_Rw1
 
-        phased_NRw1 = correction_multiplier*NRw1 + correction_offset
+        #phased_NRw1 = correction_multiplier*NRw1 + correction_offset
+        phased_NRw1 = correction_multiplier*NRw1*np.exp(1j*np.pi*phase_correct) \
+                     + correction_offset
         nr = sf.require_dataset('phased non-rephasing', shape=spectra_shape,
-                dtype=complex, data=phased_NRw1) 
+                dtype=complex)
+        nr[...] = phased_NRw1
 
-        phased_2D = correction_multiplier*Sw1 + correction_offset
-        dd = sf.require_dataset('phased 2D', shape=spectra_shape, 
-                dtype=complex, data=phased_2D)
+        #phased_2D = correction_multiplier*Sw1 + correction_offset
+        phased_2D = correction_multiplier*Sw1*np.exp(1j*np.pi*phase_correct) \
+                      + correction_offset
+        dd = sf.require_dataset('phased 2D', shape=spectra_shape,
+                dtype=complex)
+        dd[...] = phased_2D
 
         # add diagnostic rephasing and nonrephasing dsets
         sf.require_dataset('windowed raw rephasing', shape=R.shape,
@@ -236,8 +250,8 @@ def apply_phase_2d(dd_file, correction_multiplier, correction_offset, **kwargs):
         sf.require_dataset('phased raw non-rephasing', shape=NR.shape,
                            dtype=complex, data=correction_multiplier*NR + correction_offset)
 
-        sf.attrs['phase lock wavelength'] = phaselock_wl 
-        sf.attrs['central wavelength'] = central_wl 
+        sf.attrs['phase lock wavelength'] = phaselock_wl
+        sf.attrs['central wavelength'] = central_wl
         # attach dimension scales
         r.dims.create_scale(f1_ax, 'raw excitation frequency')
         r.dims.create_scale(f1_ax_pl, 'phase-locked excitation frequency')
@@ -263,14 +277,14 @@ def apply_phase_2d(dd_file, correction_multiplier, correction_offset, **kwargs):
                 x.dims[2].attach_scale(sf['axes/detection frequency'])
 
 experiment_map = {
-    'transient-grating': (apply_phase_tg, {}), 
-    'stark transient-grating': (apply_phase_tg, {'stark':True}), 
+    'transient-grating': (apply_phase_tg, {}),
+    'stark transient-grating': (apply_phase_tg, {'stark':True}),
     '2d': (apply_phase_2d, {}),
     'stark 2d': (apply_phase_2d, {'stark':True}),
     }
 
 def run(path, ref_name, ref_batch, exp_name, exp_batch, plot=False,
-        force=False, stark=False):
+        force=False, stark=False, phase_correct=0.0):
     path = Path(path)
 
     # create folder if it doesn't exist
@@ -281,7 +295,7 @@ def run(path, ref_name, ref_batch, exp_name, exp_batch, plot=False,
 
     ref_file = path / '{:s}-batch{:02d}.h5'.format(ref_name, ref_batch)
     exp_file = path / '{:s}-batch{:02d}.h5'.format(exp_name, exp_batch)
-    
+
     if not all([ref_file.exists(), exp_file.exists()]):
         s = 'Could not find one of the data files. ' +\
             'Please check that `{!s}` and `{!s}` exist.'.format(ref_file, exp_file)
@@ -296,15 +310,15 @@ def run(path, ref_name, ref_batch, exp_name, exp_batch, plot=False,
             nudie.log.error(s)
             raise RuntimeError(s)
 
-        phaselock_wl = sf.attrs['phase lock wavelength'] 
-        central_wl = sf.attrs['central wavelength'] 
+        phaselock_wl = sf.attrs['phase lock wavelength']
+        central_wl = sf.attrs['central wavelength']
         excitation_axis_pad_to = sf.attrs['excitation axis zero pad to']
         correction_multiplier = np.array(sf['correction multiplier'])
         correction_offset = np.array(sf['correction offset'])
 
     with h5py.File(str(exp_file), 'r') as sf:
         exp_type = sf.attrs['experiment type']
-    
+
     exp_func, exp_kwargs = experiment_map[exp_type]
 
     # dispatch to apply_phase function
@@ -313,6 +327,9 @@ def run(path, ref_name, ref_batch, exp_name, exp_batch, plot=False,
     exp_kwargs['central_wl'] = central_wl
     exp_kwargs['phaselock_wl'] = phaselock_wl
     exp_kwargs['excitation_axis_pad_to'] = excitation_axis_pad_to
+
+    # allow phase correction, in units of pi
+    exp_kwargs['phase_correct'] = phase_correct
 
     exp_func(exp_file, correction_multiplier, correction_offset, **exp_kwargs)
 
@@ -339,13 +356,14 @@ def main(config, verbosity=nudie.logging.INFO):
             nudie.log.error(s)
             return
 
-        run(val['path'], 
-                val['reference name'], 
-                val['reference batch'], 
+        run(val['path'],
+                val['reference name'],
+                val['reference batch'],
                 val['experiment name'],
-                val['experiment batch'], 
-                plot=val['plot'], 
-                force=val['force'])
+                val['experiment batch'],
+                plot=val['plot'],
+                force=val['force'],
+                phase_correct=val['phase correct'])
     except Exception as e:
         nudie.log.exception(e)
 

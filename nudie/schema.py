@@ -4,7 +4,7 @@ utility functions for cleaning up the config file
 """
 
 from functools import lru_cache
-import configparser 
+import configparser
 from pathlib import Path
 from collections import OrderedDict
 import logging
@@ -16,7 +16,7 @@ from voluptuous import Schema, Required, Coerce, Optional, REMOVE_EXTRA
 class BoolStr(str):
     truthy = ['true', 'yes', '1', 'on']
     falsy = ['false', 'no', '0', 'off']
-    
+
     def __bool__(self):
         s = self.strip().lower()
         if s in self.truthy:
@@ -39,14 +39,14 @@ class IntList(list):
     def __init__(self, s):
         if s == '' or s is None:
             super(IntList, self).__init__([])
-        else:            
+        else:
             super(IntList, self).__init__(map(int, s.split(',')))
 
 class FloatList(list):
     def __init__(self, s):
         if s == '' or s is None:
             super(FloatList, self).__init__([])
-        else:            
+        else:
             super(FloatList, self).__init__(map(float, s.split(',')))
 
 def as_dict(config):
@@ -92,7 +92,7 @@ schema_2d = Schema({
     Optional('force'): Coerce(BoolStr),
     Optional('stark'): Coerce(BoolStr),
     Optional('field on threshold'): Coerce(float),
-    Optional('probe ref delay'): Coerce(float), 
+    Optional('probe ref delay'): Coerce(float),
     Optional('lo width'): Coerce(float),
     Optional('dc width'): Coerce(float),
     Optional('detection axis zero pad to'): Coerce(int),
@@ -112,7 +112,7 @@ schema_tg = Schema({
     Optional('force'): Coerce(BoolStr),
     Optional('stark'): Coerce(BoolStr),
     Optional('field on threshold'): Coerce(float),
-    Optional('probe ref delay'): Coerce(float), 
+    Optional('probe ref delay'): Coerce(float),
     Optional('lo width'): Coerce(float),
     Optional('dc width'): Coerce(float),
     Optional('detection axis zero pad to'): Coerce(int),
@@ -137,6 +137,7 @@ schema_phasing = Schema({
     Optional('phaselock wl'): Coerce(float),
     Optional('central wl'): Coerce(float),
     Optional('phasing t2'): Coerce(float),
+    Optional('phase correct'): Coerce(float),
     }, extra=REMOVE_EXTRA)
 
 defaults = {
@@ -184,6 +185,7 @@ defaults = {
         'phaselock wl' : 650,
         'central wl' : 650,
         'phasing t2' : 10000,
+        'phase correct' : 0,
         },
     }
 
@@ -192,9 +194,9 @@ def parse_config(path, which='all'):
     log.debug('parse_config got `{!s}` as input file'.format(path))
 
     schemas = {
-        '2d': schema_2d, 
-        'tg': schema_tg, 
-        'pump probe': schema_pp, 
+        '2d': schema_2d,
+        'tg': schema_tg,
+        'pump probe': schema_pp,
         'phasing': schema_phasing}
 
     if which == 'all':
@@ -214,8 +216,8 @@ def parse_config(path, which='all'):
 
     try:
         cfg = configparser.ConfigParser(default_section='common',
-                interpolation=configparser.ExtendedInterpolation(), 
-                empty_lines_in_values=False, 
+                interpolation=configparser.ExtendedInterpolation(),
+                empty_lines_in_values=False,
                 allow_no_value=True)
         log.debug('setting defaults:')
         for sec, val in defaults.items():
@@ -230,7 +232,7 @@ def parse_config(path, which='all'):
                 log.debug('    {!s}: {!s}'.format(subsec, subval))
 
         log.debug('validating to schema')
-        cfg = as_dict(cfg) 
+        cfg = as_dict(cfg)
         validated = OrderedDict()
 
         for key, schema in to_validate:
