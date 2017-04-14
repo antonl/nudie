@@ -138,6 +138,7 @@ schema_phasing = Schema({
     Optional('central wl'): Coerce(float),
     Optional('phasing t2'): Coerce(float),
     Optional('phase correct'): Coerce(float),
+    Optional('smooth t1'): Coerce(BoolStr),
     }, extra=REMOVE_EXTRA)
 
 defaults = {
@@ -185,6 +186,7 @@ defaults = {
         'phaselock wl' : 650,
         'central wl' : 650,
         'phasing t2' : 10000,
+        'smooth t1': True,
         'phase correct' : 0,
         },
     }

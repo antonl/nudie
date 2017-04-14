@@ -130,6 +130,7 @@ def apply_phase_2d(dd_file, correction_multiplier, correction_offset, **kwargs):
     stark = kwargs.get('stark', False)
     plot = kwargs.get('plot', False)
     phase_correct = kwargs.get('phase_correct', 0.0)
+    smooth_t1 = kwargs.get('smooth_t1', True)
 
     # load 2D data
     with h5py.File(str(dd_file), 'a') as sf:
@@ -198,14 +199,36 @@ def apply_phase_2d(dd_file, correction_multiplier, correction_offset, **kwargs):
         roll_by = 1 if excitation_axis_pad_to % 2 == 0 else 0
 
         t1_len = t1.shape[0]
-        window_sym = get_window(('kaiser', 8.0), 2*t1_len, fftbins=True)
-        window_sym[t1_len] = 0.5
-        window = window_sym[t1_len:]
+        if smooth_t1:
+            window_sym = get_window(('kaiser', 8.0), 2*t1_len, fftbins=True)
+            window = window_sym[t1_len:]
+        else:
+            window = np.ones((t1_len,))
+
+        window_func = lambda x: np.einsum('ijk,j->ijk', x, window)
+        # average first and last point together
+        def apply_boundary_conds(S, axis=1):
+            # get the first and last indices
+            ind_start = tuple([0 if i == axis else slice(None) \
+                               for i in range(S.ndim)])
+            ind_end = tuple([-1 if i == axis else slice(None) \
+                             for i in range(S.ndim)])
+            # normally I would do this application at the beginning and end,
+            # but because of zero padding, it only makes sense at the end
+            # This is equivalent to adding a 1/2 to the first point of the
+            # window
+            avg = 0.5*(S[ind_start] + S[ind_end])
+            print(ind_start, ind_end)
+
+            # replace original signal at boundaries with average
+            S[ind_start] = avg
 
         if stark:
             window_func = lambda x: np.einsum('ijkl,k->ijkl', x, window)
             diagnostic_R = window_func(R)
             diagnostic_NR = window_func(NR)
+            apply_boundary_conds(diagnostic_R, axis=2)
+            apply_boundary_conds(diagnostic_NR, axis=2)
             Rw1 = np.fft.fftshift(np.fft.fft(diagnostic_R, axis=2, n=excitation_axis_pad_to), axes=2)
             NRw1 = np.fft.fftshift(np.fft.fft(diagnostic_NR, axis=2, n=excitation_axis_pad_to), axes=2)
 
@@ -214,6 +237,8 @@ def apply_phase_2d(dd_file, correction_multiplier, correction_offset, **kwargs):
             window_func = lambda x: np.einsum('ijk,j->ijk', x, window)
             diagnostic_R = window_func(R)
             diagnostic_NR = window_func(NR)
+            apply_boundary_conds(diagnostic_R, axis=1)
+            apply_boundary_conds(diagnostic_NR, axis=1)
             Rw1 = np.fft.fftshift(np.fft.fft(diagnostic_R, axis=1, n=excitation_axis_pad_to), axes=1)
             NRw1 = np.fft.fftshift(np.fft.fft(diagnostic_NR, axis=1, n=excitation_axis_pad_to), axes=1)
             Sw1 = 0.5*(np.roll(Rw1[:, ::-1], shift=roll_by, axis=1) + NRw1)
@@ -284,7 +309,7 @@ experiment_map = {
     }
 
 def run(path, ref_name, ref_batch, exp_name, exp_batch, plot=False,
-        force=False, stark=False, phase_correct=0.0):
+        force=False, stark=False, phase_correct=0.0, smooth_t1=True):
     path = Path(path)
 
     # create folder if it doesn't exist
@@ -330,6 +355,8 @@ def run(path, ref_name, ref_batch, exp_name, exp_batch, plot=False,
 
     # allow phase correction, in units of pi
     exp_kwargs['phase_correct'] = phase_correct
+    # enable/disable smoothing of 2D
+    exp_kwargs['smooth_t1'] = smooth_t1
 
     exp_func(exp_file, correction_multiplier, correction_offset, **exp_kwargs)
 
@@ -363,7 +390,8 @@ def main(config, verbosity=nudie.logging.INFO):
                 val['experiment batch'],
                 plot=val['plot'],
                 force=val['force'],
-                phase_correct=val['phase correct'])
+                phase_correct=val['phase correct'],
+                smooth_t1=val['smooth t1'])
     except Exception as e:
         nudie.log.exception(e)
 
