@@ -48,7 +48,7 @@ def plot_phasing_tg(f, tg):
 
 def run(tg_name, tg_batch, when='today', wavelengths=None, plot=False, 
         pad_to=2048, prd_est=850., lo_width=200, dc_width=200,
-        gaussian_power=2., analysis_path='./analyzed'):
+        gaussian_power=2., analysis_path='./analyzed', datapath=None):
 
     if plot:
         import matplotlib as mpl
@@ -61,8 +61,12 @@ def run(tg_name, tg_batch, when='today', wavelengths=None, plot=False,
     npixels = 1340
     trim_to = 3, -3
 
+    # change datapath
+    if datapath is None:
+       datapath = nudie.data_folder
+
     # load up tg data to use
-    tg_info = next(nudie.load_job(job_name=tg_name, batch_set=[tg_batch], when=when))
+    tg_info = next(nudie.load_job(job_name=tg_name, batch_set=[tg_batch], when=when, data_path=datapath))
     
     phase_cycles = ['none1', 'zero', 'none2', 'pipi']
 
