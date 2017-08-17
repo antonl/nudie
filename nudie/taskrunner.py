@@ -49,12 +49,13 @@ class MainWindow(QtWidgets.QMainWindow):
         self.dd_btn.clicked.connect(self.on_dd)
         self.linear_btn = QtWidgets.QPushButton("Linear Absorption")
         self.linear_btn.clicked.connect(self.on_linear)
+        self.linear_btn.setEnabled(False)
         self.stark_chk = QtWidgets.QCheckBox("Stark")
         self.stark_chk.setChecked(False)
         self.stark_chk.stateChanged.connect(self.on_stark_check)
 
         for x in [self.pp_btn, self.tg_btn, self.dd_btn, self.linear_btn, self.stark_chk]:
-            x.setMinimumWidth(90)
+            x.setMinimumWidth(120)
             exp_layout.addWidget(x)
             exp_layout.setStretchFactor(x, 1)
         exp_group.setLayout(exp_layout)
@@ -154,10 +155,10 @@ class MainWindow(QtWidgets.QMainWindow):
             
     def on_linear(self):
         self.linear_btn.setEnabled(False)
-        self.stark_chk.isChecked():
-        self.linear_btn.setText('Running Linear Stark')
+        self.linear_btn.setText("Running Linear Stark")
         self.workers.apply_async(linear_stark_main, [self.config],{},self.linear_done,
             self.linear_done)
+
             
     def linear_done(self, result):
         if self.stark_chk.isChecked():

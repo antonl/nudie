@@ -141,6 +141,18 @@ schema_phasing = Schema({
     Optional('smooth t1'): Coerce(BoolStr),
     }, extra=REMOVE_EXTRA)
 
+schema_linear = Schema({
+    Required('jobname'): str,
+    Required('batch'): Coerce(int),
+    Required('when'): str, # probably should validate to a valid date
+    Required('wavelengths'): str,
+    Required('analysis path'): str,
+    Required('data path'): str,
+    Optional('plot'): Coerce(BoolStr),
+    Optional('stark'): Coerce(BoolStr),
+    Optional('exclude'): Coerce(IntList),
+    }, extra=REMOVE_EXTRA)
+
 defaults = {
     'pump probe': {
         'exclude' : '',
@@ -189,6 +201,10 @@ defaults = {
         'smooth t1': True,
         'phase correct' : 0,
         },
+    'linear': {
+        'exclude' : '',
+        'plot'    : False,
+        },
     }
 
 def parse_config(path, which='all'):
@@ -199,8 +215,8 @@ def parse_config(path, which='all'):
         '2d': schema_2d,
         'tg': schema_tg,
         'pump probe': schema_pp,
-        'phasing': schema_phasing
-        'linear' : linear}
+        'phasing': schema_phasing,
+        'linear' : schema_linear}
 
     if which == 'all':
         to_validate = schemas.items()

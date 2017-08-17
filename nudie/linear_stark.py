@@ -29,6 +29,8 @@ import numpy as np
 import h5py
 import numpy.ma as ma
 
+import matplotlib.pyplot as pyplot
+
 import argparse
 
 # turn on printing of errors
@@ -67,7 +69,7 @@ def load_wavelengths(path):
         wl = np.squeeze(calib['saved_wavelengths'])
     return wl
 
-def run(stark_name, stark_batch, when='today', wavelengths=None, plot=False, analysis_path='./analyzed', datapath = None):
+def run(stark_name, stark_batch, when='today', wavelengths=None, plot=False, analysis_path='analyzed', datapath = None):
     '''run the batch job to analyze the linear-stark data
     
     Performs a shot-to-shot linear stark analysis. 
@@ -77,9 +79,11 @@ def run(stark_name, stark_batch, when='today', wavelengths=None, plot=False, ana
     plots
     '''
 
+    analysis_folder = Path(analysis_path)
+
     # create folder if it doesn't exist
-    if not analysis_path.exists():
-        analysis_path.mkdir()
+    if not analysis_folder.exists():
+        analysis_folder.mkdir()
 
     # change datapath
     if datapath is None:
@@ -204,7 +208,7 @@ def run(stark_name, stark_batch, when='today', wavelengths=None, plot=False, ana
                 timestamp=timestamp.format('YYYY-MM-DD'),
                 name=stark_info['batch_name'], voltage=mean_voltage)
 
-        with h5py.File(str(analysis_path / filename), mode='w') as f:
+        with h5py.File(str(analysis_folder / filename), mode='w') as f:
             for data, j in saved_data:
                 f[j] = data
             
