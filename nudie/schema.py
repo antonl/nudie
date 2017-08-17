@@ -199,7 +199,8 @@ def parse_config(path, which='all'):
         '2d': schema_2d,
         'tg': schema_tg,
         'pump probe': schema_pp,
-        'phasing': schema_phasing}
+        'phasing': schema_phasing
+        'linear' : linear}
 
     if which == 'all':
         to_validate = schemas.items()

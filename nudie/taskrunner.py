@@ -11,6 +11,7 @@ from nudie.stark_tg import main as stark_tg_main
 from nudie.phasing import main as phasing_main
 from nudie.apply_phase import main as apply_phase_main
 from nudie.stark_dd import main as stark_dd_main
+from nudie.linear_stark import main as linear_stark_main
 
 class MainWindow(QtWidgets.QMainWindow):
     def __init__(self, *args, **kwargs):
@@ -46,12 +47,14 @@ class MainWindow(QtWidgets.QMainWindow):
         self.tg_btn.clicked.connect(self.on_tg)
         self.dd_btn = QtWidgets.QPushButton("2D")
         self.dd_btn.clicked.connect(self.on_dd)
+        self.linear_btn = QtWidgets.QPushButton("Linear Absorption")
+        self.linear_btn.clicked.connect(self.on_linear)
         self.stark_chk = QtWidgets.QCheckBox("Stark")
         self.stark_chk.setChecked(False)
         self.stark_chk.stateChanged.connect(self.on_stark_check)
 
-        for x in [self.pp_btn, self.tg_btn, self.dd_btn, self.stark_chk]:
-            x.setMinimumWidth(120)
+        for x in [self.pp_btn, self.tg_btn, self.dd_btn, self.linear_btn, self.stark_chk]:
+            x.setMinimumWidth(90)
             exp_layout.addWidget(x)
             exp_layout.setStretchFactor(x, 1)
         exp_group.setLayout(exp_layout)
@@ -76,16 +79,23 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def on_stark_check(self, state):
         # No such thing as stark pp
+        # Currently no normal linear absorption code for this ui
         if state == 2: # checked
             for x in [self.pp_btn]:
                 x.setEnabled(False)
+            for x in [self.linear_btn]:
+                x.setEnabled(True)
             self.dd_btn.setText('Stark 2D')
             self.tg_btn.setText('Stark TG')
+            self.linear_btn.setText('Linear Stark')
         elif state == 0:
             for x in [self.pp_btn]:
                 x.setEnabled(True)
+            for x in [self.linear_btn]:
+                x.setEnabled(False)
             self.dd_btn.setText('2D')
             self.tg_btn.setText('Transient Grating')
+            self.linear_btn.setText('Linear Absorption')
 
     def on_choose_file(self):
         try:
@@ -141,7 +151,22 @@ class MainWindow(QtWidgets.QMainWindow):
             self.dd_btn.setText("Stark 2D")
         else:
             self.dd_btn.setText("2D")
-
+            
+    def on_linear(self):
+        self.linear_btn.setEnabled(False)
+        self.stark_chk.isChecked():
+        self.linear_btn.setText('Running Linear Stark')
+        self.workers.apply_async(linear_stark_main, [self.config],{},self.linear_done,
+            self.linear_done)
+            
+    def linear_done(self, result):
+        if self.stark_chk.isChecked():
+            self.linear_btn.setEnabled(True)
+            self.linear_btn.setText("Linear Stark")
+        else:
+            self.linear_btn.setEnabled(False)
+            self.linear_btn.setText("Linear Absorption")
+            
     def on_phasing(self):
         self.phasing_btn.setEnabled(False)
         self.phasing_btn.setText("Running phasing")

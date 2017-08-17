@@ -67,7 +67,7 @@ def load_wavelengths(path):
         wl = np.squeeze(calib['saved_wavelengths'])
     return wl
 
-def run(stark_name, stark_batch, when='today', wavelengths=None, plot=False):
+def run(stark_name, stark_batch, when='today', wavelengths=None, plot=False, analysis_path='./analyzed', datapath = None):
     '''run the batch job to analyze the linear-stark data
     
     Performs a shot-to-shot linear stark analysis. 
@@ -77,15 +77,16 @@ def run(stark_name, stark_batch, when='today', wavelengths=None, plot=False):
     plots
     '''
 
-    # generate hdf filename based on data date
-    analysis_folder = Path('./analyzed')
     # create folder if it doesn't exist
-    if not analysis_folder.exists():
-        analysis_folder.mkdir()
+    if not analysis_path.exists():
+        analysis_path.mkdir()
 
+    # change datapath
+    if datapath is None:
+        datapath = nudie.data_folder
 
     # load up pp data to use for linear stark
-    stark_info = next(nudie.load_job(job_name=stark_name, batch_set=[stark_batch], when=when))
+    stark_info = next(nudie.load_job(job_name=stark_name, batch_set=[stark_batch], when=when, data_path=datapath))
 
     # set current batch directory
     current_path = Path(stark_info['batch_path'])
@@ -203,7 +204,7 @@ def run(stark_name, stark_batch, when='today', wavelengths=None, plot=False):
                 timestamp=timestamp.format('YYYY-MM-DD'),
                 name=stark_info['batch_name'], voltage=mean_voltage)
 
-        with h5py.File(str(analysis_folder / filename), mode='w') as f:
+        with h5py.File(str(analysis_path / filename), mode='w') as f:
             for data, j in saved_data:
                 f[j] = data
             
@@ -222,7 +223,38 @@ def run(stark_name, stark_batch, when='today', wavelengths=None, plot=False):
                 pyplot.xlabel('wavelength / nm')
                 pyplot.ylabel('OD')
                 pyplot.show()
-            
+
+
+
+
+def main(config, verbosity=nudie.logging.INFO):
+    nudie.show_errors(verbosity)
+
+    try:
+        try:
+            val = nudie.parse_config(config, which='linear')['linear']
+        except ValueError as e:
+            nudie.log.error('could not validate file. Please check ' +\
+                'configuration options.')
+            return
+
+        if val['stark'] != True:
+            s = 'the stark flag is not set in the configuration. ' +\
+                'Are you sure you are using the right configuration file?'
+            nudie.log.error(s)
+            return
+
+        run(stark_name=val['jobname'],
+            stark_batch=val['batch'],
+            when=val['when'],
+            wavelengths=val['wavelengths'],
+            plot=val['plot'],
+            analysis_path=val['analysis path'],
+            datapath=val['data path'])
+    except Exception as e:
+        nudie.log.exception(e)
+
+
 if __name__ == '__main__':
     parser = make_parser()
     args = vars(parser.parse_args())
